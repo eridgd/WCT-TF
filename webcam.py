@@ -59,16 +59,16 @@ class StyleWindow(object):
             cv2.createTrackbar('index','Style Controls', 0, len(self.style_imgs)-1, self.set_idx)
         
         # Blend param for AdaIN transform
-        cv2.createTrackbar('alpha','Style Controls', 100, 100, self.set_alpha)
+        cv2.createTrackbar('alpha','Style Controls', int(self.alpha*100), 100, self.set_alpha)
 
         # Resize style to this size before cropping
-        cv2.createTrackbar('size','Style Controls', img_size, 2048, self.set_size)
+        cv2.createTrackbar('size','Style Controls', self.img_size, 2048, self.set_size)
 
         # Size of square crop box for style
-        cv2.createTrackbar('crop size','Style Controls', crop_size, 2048, self.set_crop_size)
+        cv2.createTrackbar('crop size','Style Controls', self.crop_size, 2048, self.set_crop_size)
 
         # Scale the content before processing
-        cv2.createTrackbar('scale','Style Controls', int(scale*100), 200, self.set_scale)
+        cv2.createTrackbar('scale','Style Controls', int(self.scale*100), 200, self.set_scale)
 
         self.set_style(random=True, window='Style Controls', style_idx=0)
 
@@ -159,7 +159,6 @@ def main():
             print("Frame:",count,"Orig shape:",frame.shape,"New shape",frame_resize.shape)
 
             content_rgb = cv2.cvtColor(frame_resize, cv2.COLOR_BGR2RGB)  # OpenCV uses BGR, we need RGB
-            # content_rgb = center_crop(resize_to(content_rgb), 480)
 
             if args.random > 0 and count % args.random == 0:
                 style_window.set_style(random=True, style_idx=0)
@@ -169,6 +168,7 @@ def main():
             else:
                 style_rgb = style_window.style_rgbs[0]
 
+            # For best results style img should be comparable size to content
             style_rgb = resize_to(style_rgb, min(content_rgb.shape[0], content_rgb.shape[1]))
 
             if args.interpolate is False:
