@@ -26,29 +26,29 @@ def wct_tf(content, style, alpha, eps=1e-6):
     mc = tf.reduce_mean(content_flat, axis=1, keep_dims=True)
     fc = content_flat - mc
 
-    fcfc = tf.matmul(fc, tf.transpose(fc)) + tf.eye(C)*eps
+    fcfc = tf.matmul(fc, fc, transpose_b=True) + tf.eye(C) * eps
     
     Sc, Uc, Vc = tf.svd(fcfc, full_matrices=True)
 
-    Dc_sq_inv = tf.diag(tf.pow(Sc+eps, -0.5))
+    Dc_sq_inv = tf.diag(tf.pow(Sc + eps, -0.5))
 
-    fc_hat = tf.matmul(tf.matmul(tf.matmul(Uc, Dc_sq_inv), tf.transpose(Uc)), fc)
+    fc_hat = tf.matmul(tf.matmul(tf.matmul(Uc, Dc_sq_inv), Uc, transpose_b=True), fc)
 
     # Compute style coloring
     ms = tf.reduce_mean(style_flat, axis=1, keep_dims=True)
     fs = style_flat - ms
 
-    fsfs = tf.matmul(fs, tf.transpose(fs)) + tf.eye(C)*eps
+    fsfs = tf.matmul(fs, tf.transpose(fs)) + tf.eye(C) * eps
 
     Ss, Us, Vs = tf.svd(fsfs, full_matrices=True)
     
-    Ds_sq = tf.diag(tf.pow(Ss+eps, 0.5))
+    Ds_sq = tf.diag(tf.pow(Ss + eps, 0.5))
 
     fcs_hat = tf.matmul(tf.matmul(tf.matmul(Us, Ds_sq), tf.transpose(Us)), fc_hat)
 
     fcs_hat = fcs_hat + ms
 
-    blended = alpha*fcs_hat + (1 - alpha)*(fc)
+    blended = alpha * fcs_hat + (1 - alpha) * fc
 
     # CxH*W -> CxHxW
     blended = tf.reshape(blended, (C,H,W))
