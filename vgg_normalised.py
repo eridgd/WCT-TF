@@ -46,8 +46,8 @@ def vgg_from_t7(t7_file, target_layer=None):
         # elif module._typename == b'nn.SpatialUpSamplingNearest': # Not needed for VGG
         #     x = Upsampling2D(name=name)(x)
         elif module._typename == b'nn.SpatialMaxPooling':
-            # x = MaxPooling2D(name=name, padding='same')(x)
-            x = AveragePooling2D(name=name, padding='same')(x)
+            x = MaxPooling2D(name=name, padding='same')(x)
+            # x = AveragePooling2D(name=name, padding='same')(x)
         else:
             raise NotImplementedError(module._typename)
 
