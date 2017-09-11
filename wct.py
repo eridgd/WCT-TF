@@ -1,13 +1,12 @@
 import numpy as np
 from utils import save_img
-from numpy.lib.scimath import sqrt as csqrt
 import tensorflow as tf
 
 def wct_test(encodings, alpha):
     return tf.identity(encodings)
 
 
-def wct_tf(content, style, alpha, eps=1e-5):
+def wct_tf(content, style, alpha, eps=1e-6):
     '''TF version of Whiten-Color Transform
         Assume that 1) content/style encodings are stacked in first two rows
         and 2) they have shape format HxWxC
@@ -27,7 +26,7 @@ def wct_tf(content, style, alpha, eps=1e-5):
     mc = tf.reduce_mean(content_flat, axis=1, keep_dims=True)
     fc = content_flat - mc
 
-    fcfc = tf.matmul(fc, fc, transpose_b=True)
+    fcfc = tf.matmul(fc, tf.transpose(fc)) + tf.eye(C)*eps
     
     Sc, Uc, Vc = tf.svd(fcfc, full_matrices=True)
 
@@ -39,7 +38,7 @@ def wct_tf(content, style, alpha, eps=1e-5):
     ms = tf.reduce_mean(style_flat, axis=1, keep_dims=True)
     fs = style_flat - ms
 
-    fsfs = tf.matmul(fs, tf.transpose(fs))
+    fsfs = tf.matmul(fs, tf.transpose(fs)) + tf.eye(C)*eps
 
     Ss, Us, Vs = tf.svd(fsfs, full_matrices=True)
     
