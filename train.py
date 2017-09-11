@@ -68,7 +68,7 @@ args = parser.parse_args()
 
 
 def batch_gen(folder, batch_shape):
-    '''Resize images to 512, randomly crop a 256 square, and normalize'''
+    '''Resize images to 512, randomly crop a 512 square, and normalize'''
     files = np.asarray(get_files(folder))
     while True:
         X_batch = np.zeros(batch_shape, dtype=np.float32)
@@ -79,7 +79,7 @@ def batch_gen(folder, batch_shape):
             try:
                 f = np.random.choice(files)
 
-                X_batch[idx] = get_img_random_crop(f, resize=512, crop=256).astype(np.float32)
+                X_batch[idx] = get_img_random_crop(f, resize=768, crop=512).astype(np.float32)
                 X_batch[idx] /= 255.    # Normalize between [0,1]
                 
                 assert(not np.isnan(X_batch[idx].min()))
@@ -93,7 +93,7 @@ def batch_gen(folder, batch_shape):
 
 
 def train():
-    batch_shape = (args.batch_size,256,256,3)
+    batch_shape = (args.batch_size,512,512,3)
 
     with tf.Graph().as_default():
         tf.logging.set_verbosity(tf.logging.INFO)
@@ -101,7 +101,7 @@ def train():
         ### Setup data loading queue
         queue_input_content = tf.placeholder(tf.float32, shape=batch_shape)
         queue_input_style = tf.placeholder(tf.float32, shape=batch_shape)
-        queue = tf.FIFOQueue(capacity=100, dtypes=[tf.float32, tf.float32], shapes=[[256,256,3], [256,256,3]])
+        queue = tf.FIFOQueue(capacity=100, dtypes=[tf.float32, tf.float32], shapes=[[512,512,3], [512,512,3]])
         enqueue_op = queue.enqueue_many([queue_input_content, queue_input_style])
         dequeue_op = queue.dequeue()
         content_batch_op, val_batch_op = tf.train.batch(dequeue_op, batch_size=args.batch_size, capacity=100)
