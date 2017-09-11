@@ -30,7 +30,7 @@ parser.add_argument('--device', type=str,
                         dest='device', help='Device to perform compute on',
                         default='/gpu:0')
 parser.add_argument('--style-size', type=int, help="Resize style image to this size before cropping", default=512)
-parser.add_argument('--crop-size', type=int, help="Crop to this square size, e.g. 256x256", default=512)
+parser.add_argument('--crop-size', type=int, help="Crop to this square size, e.g. 256x256", default=0)
 parser.add_argument('--alpha', type=float, help="Alpha blend value", default=1)
 parser.add_argument('--concat', action='store_true', help="Concatenate style image and stylized output", default=False)
 parser.add_argument('--interpolate', action='store_true', help="Interpolate between two images", default=False)
@@ -86,7 +86,10 @@ class StyleWindow(object):
             self.idx = np.random.randint(len(self.style_imgs))
 
         style_file = self.style_imgs[self.idx]
-        self.style_rgbs[style_idx] = get_img_crop(style_file, resize=self.img_size, crop=self.crop_size)
+        if self.crop_size > 0:
+            self.style_rgbs[style_idx] = get_img_crop(style_file, resize=self.img_size, crop=self.crop_size)
+        else:
+            self.style_rgbs[style_idx] = resize_to(get_img(style_file), self.img_size)
         self.show_style(window, self.style_rgbs[style_idx])
 
     def set_idx(self, idx):
