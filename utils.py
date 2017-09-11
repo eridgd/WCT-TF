@@ -53,7 +53,7 @@ def resize_to(img, resize=512):
         long_side = round(height / ratio)
         resize_shape = (long_side, resize, 3)
     
-    return scipy.misc.imresize(img, resize_shape)
+    return scipy.misc.imresize(img, resize_shape, interp='bilinear')
 
 def get_img_crop(src, resize=512, crop=256):
     '''Get & resize image and center crop'''
