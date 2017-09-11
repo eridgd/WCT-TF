@@ -32,7 +32,7 @@ class AdaINModel(object):
 
         ### Load shared VGG model up to relu4_1
         with tf.name_scope('encoder'):
-            self.vgg_model = vgg_from_t7(vgg_weights, target_layer='relu3_1')
+            self.vgg_model = vgg_from_t7(vgg_weights, target_layer='relu4_1')
         print(self.vgg_model.summary())
 
         ### Build encoder for reluX_1
@@ -40,7 +40,7 @@ class AdaINModel(object):
             self.content_imgs = tf.placeholder_with_default(tf.constant([[[[0.,0.,0.]]]]), shape=batch_shape, name='content_imgs')
 
             # Build content layer encoding model
-            content_layer = self.vgg_model.get_layer('relu3_1').output
+            content_layer = self.vgg_model.get_layer('relu4_1').output
             self.content_encoder_model = Model(inputs=self.vgg_model.input, outputs=content_layer)
 
             # Setup content layer encodings for content images
@@ -81,12 +81,12 @@ class AdaINModel(object):
                 # Conv2DReflect(512, 3, padding='valid', activation='relu'),  # 32x32 / 512->256
                 # Conv2DReflect(512, 3, padding='valid', activation='relu'),  # 32x32 / 512->256
                 # Conv2DReflect(512, 3, padding='valid', activation='relu'),  # 32x32 / 512->256
-                # # Relu4_1
-                # Conv2DReflect(256, 3, padding='valid', activation='relu'),  # 32x32 / 512->256
-                # UpSampling2D(),                                             # 32x32 -> 64x64
-                # Conv2DReflect(256, 3, padding='valid', activation='relu'),  # 64x64 / 256->256
-                # Conv2DReflect(256, 3, padding='valid', activation='relu'),  # 64x64 / 256->256
-                # Conv2DReflect(256, 3, padding='valid', activation='relu'),  # 64x64 / 256->256
+                # Relu4_1
+                Conv2DReflect(256, 3, padding='valid', activation='relu'),  # 32x32 / 512->256
+                UpSampling2D(),                                             # 32x32 -> 64x64
+                Conv2DReflect(256, 3, padding='valid', activation='relu'),  # 64x64 / 256->256
+                Conv2DReflect(256, 3, padding='valid', activation='relu'),  # 64x64 / 256->256
+                Conv2DReflect(256, 3, padding='valid', activation='relu'),  # 64x64 / 256->256
                 # Relu3_1
                 Conv2DReflect(128, 3, padding='valid', activation='relu'),  # 64x64 / 256->128
                 UpSampling2D(),                                             # 64x64 -> 128x128

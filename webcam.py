@@ -172,7 +172,7 @@ def main():
                 style_rgb = style_window.style_rgbs[0]
 
             # For best results style img should be comparable size to content
-            style_rgb = resize_to(style_rgb, min(content_rgb.shape[0], content_rgb.shape[1]))
+            # style_rgb = resize_to(style_rgb, min(content_rgb.shape[0], content_rgb.shape[1]))
 
             if args.interpolate is False:
                 # Run the frame through the style network
