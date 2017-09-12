@@ -2,14 +2,14 @@ import numpy as np
 from utils import save_img
 import tensorflow as tf
 
-def wct_test(encodings, alpha):
-    return tf.identity(encodings)
-
 
 def wct_tf(content, style, alpha, eps=1e-6):
-    '''TF version of Whiten-Color Transform
-        Assume that 1) content/style encodings are stacked in first two rows
-        and 2) they have shape format HxWxC
+    '''TF/GPU version of Whiten-Color Transform
+       Assume that 1) content/style encodings are stacked in first two rows
+       and 2) they have shape format HxWxC
+
+       See p.4 of the Universal Style Transfer paper for equations:
+       https://arxiv.org/pdf/1705.08086.pdf
     '''
     # Remove batch dim and reorder to CxHxW
     content_t = tf.transpose(tf.squeeze(content), (2, 0, 1))
@@ -58,7 +58,7 @@ def wct_tf(content, style, alpha, eps=1e-6):
     return blended
      
 
-def wct(content, style, alpha=0.6, eps=1e-5):
+def wct_np(content, style, alpha=0.6, eps=1e-5):
     '''Perform Whiten-Color Transform on feature maps
        See p.4 of the Universal Style Transfer paper for equations:
        https://arxiv.org/pdf/1705.08086.pdf
