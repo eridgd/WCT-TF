@@ -5,7 +5,7 @@ import numpy as np
 import time
 from model import AdaINModel
 import tensorflow as tf
-from wct import wct
+from wct import wct_np
 from coral import coral_numpy
 
 
@@ -52,6 +52,44 @@ class AdaINference(object):
     @staticmethod
     def postprocess(image):
         return np.uint8(np.clip(image, 0, 1) * 255)
+
+    def predict_np(self, content, style, alpha=1):
+        '''Stylize a single content/style pair with numpy WCT
+           Assumes that images are RGB [0,255]
+        '''
+        content = self.preprocess(content)
+        style   = self.preprocess(style)
+
+        # if self.style_encoded is None:
+        style_encoded = self.sess.run(self.model.style_encoded, feed_dict={self.model.style_img: style,
+                                                                           self.model.compute_style: True,
+                                                                           self.model.compute_content: False})
+
+        
+        s = time.time()
+        # print("style")
+        # print(style_encoded)
+        content_encoded = self.sess.run(self.encoded, feed_dict={self.content_imgs: content,
+                                                                 self.model.compute_content: True})
+        # print("content")
+        # print(content_encoded)
+        encoded_wct = wct_np(content_encoded.squeeze(), style_encoded.squeeze(), alpha)
+        # print("wct")
+        # print(encoded_wct)
+
+        stylized = self.sess.run(self.decoded, feed_dict={self.model.decoder_input: np.expand_dims(encoded_wct, 0)})
+        # stylized = self.sess.run(self.decoded, feed_dict={
+        #                                                   self.content_imgs: content,
+        #                                                   self.model.style_img: style,
+        #                                                   self.model.compute_content: True,
+        #                                                   self.model.compute_style: True,
+        #                                                   self.model.apply_wct: True,
+        #                                                   self.model.alpha: alpha})
+        print(time.time() - s)
+        
+
+        return self.postprocess(stylized[0])
+
 
     def predict(self, content, style, alpha=1):
         '''Stylize a single content/style pair

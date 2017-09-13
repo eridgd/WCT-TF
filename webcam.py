@@ -177,6 +177,7 @@ def main():
             if args.interpolate is False:
                 # Run the frame through the style network
                 stylized_rgb = ada_in.predict(content_rgb, style_rgb, style_window.alpha)
+                # stylized_rgb = ada_in.predict_np(content_rgb, style_rgb, style_window.alpha) # Numpy version
             else:
                 interp_weights = [style_window.interp_weight, 1 - style_window.interp_weight]
                 stylized_rgb = ada_in.predict_interpolate(content_rgb, 
