@@ -26,7 +26,7 @@ def wct_tf(content, style, alpha, eps=1e-6):
     mc = tf.reduce_mean(content_flat, axis=1, keep_dims=True)
     fc = content_flat - mc
 
-    fcfc = tf.matmul(fc, fc, transpose_b=True) + tf.eye(C) * eps
+    fcfc = tf.matmul(fc, fc, transpose_b=True) / (tf.cast(H*W, tf.float32) - tf.constant(1.))
     
     Sc, Uc, Vc = tf.svd(fcfc, full_matrices=True)
 
@@ -38,7 +38,7 @@ def wct_tf(content, style, alpha, eps=1e-6):
     ms = tf.reduce_mean(style_flat, axis=1, keep_dims=True)
     fs = style_flat - ms
 
-    fsfs = tf.matmul(fs, tf.transpose(fs)) + tf.eye(C) * eps
+    fsfs = tf.matmul(fs, tf.transpose(fs)) / (tf.cast(Hs*Ws, tf.float32) - tf.constant(1.))
 
     Ss, Us, Vs = tf.svd(fsfs, full_matrices=True)
     
@@ -75,11 +75,11 @@ def wct_np(content, style, alpha=0.6, eps=1e-5):
     mc = content_flat.mean(axis=1, keepdims=True)
     fc = content_flat - mc
 
-    fcfc = np.dot(fc, fc.T)
+    fcfc = np.dot(fc, fc.T) / (content_t.shape[1]*content_t.shape[2] - 1)
     
     Ec, wc, _ = np.linalg.svd(fcfc)
 
-    Dc_sq_inv = np.linalg.inv(np.sqrt(np.diag(wc_eps)))
+    Dc_sq_inv = np.linalg.inv(np.sqrt(np.diag(wc+eps)))
 
     fc_hat = Ec.dot(Dc_sq_inv).dot(Ec.T).dot(fc)
 
@@ -87,7 +87,7 @@ def wct_np(content, style, alpha=0.6, eps=1e-5):
     ms = style_flat.mean(axis=1, keepdims=True)
     fs = style_flat - ms
 
-    fsfs = np.dot(fs, fs.T)
+    fsfs = np.dot(fs, fs.T) / (style_t.shape[1]*style_t.shape[2] - 1)
 
     Es, ws, _ = np.linalg.svd(fsfs)
     

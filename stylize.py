@@ -11,7 +11,6 @@ import scipy
 from scipy.ndimage.filters import gaussian_filter
 import time
 from inference import AdaINference
-from wct import wct
 
 
 parser = argparse.ArgumentParser()
@@ -74,7 +73,8 @@ def main():
             style_prefix = os.path.basename(style_prefix)  # Extract filename prefix without ext
 
             # style_img = get_img_crop(style_fullpath, resize=args.style_size, crop=args.crop_size)
-            style_img = resize_to(get_img(style_fullpath), content_img.shape[0])
+            # style_img = resize_to(get_img(style_fullpath), content_img.shape[0])
+            style_img = resize_to(get_img(style_fullpath), args.style_size)
             
             if args.keep_colors:
                 style_img = preserve_colors_np(style_img, content_img)
@@ -85,6 +85,7 @@ def main():
 
             # Run the frame through the style network
             stylized_rgb = wct_model.predict(content_img, style_img, args.alpha)
+            # stylized_rgb = wct_model.predict_np(content_img, style_img, args.alpha) # Numpy version
 
             if args.passes > 1:
                 for _ in range(args.passes-1):
@@ -97,7 +98,7 @@ def main():
                 stylized_rgb = np.hstack([style_img_resized, stylized_rgb])
 
             # Format for out filename: {out_path}/{content_prefix}_{style_prefix}.{content_ext}
-            out_f = os.path.join(args.out_path, '{}_{}{}'.format(content_prefix, style_prefix, content_ext))
+            out_f = os.path.join(args.out_path, 'np_{}_{}{}'.format(content_prefix, style_prefix, content_ext))
             # out_f = f'{content_prefix}_{style_prefix}.{content_ext}'
             
             save_img(out_f, stylized_rgb)
