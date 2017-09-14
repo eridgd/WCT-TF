@@ -5,11 +5,10 @@ import numpy as np
 from vgg_normalised import vgg_from_t7
 from keras import backend as K
 from keras.models import Model
-from keras.layers import Input, Conv2D, Lambda, UpSampling2D
-from keras.initializers import VarianceScaling
+from keras.layers import Input, UpSampling2D, Lambda
 from ops import pad_reflect, Conv2DReflect, torch_decay, mse, sse
 import functools
-from wct import wct_tf, wct_test
+from wct import wct_tf
 
 
 class AdaINModel(object):
@@ -74,38 +73,50 @@ class AdaINModel(object):
         # Content layer encoding for stylized out
         self.decoded_encoded = self.content_encoder_model(self.decoded)
 
-    def build_decoder(self, input_shape): 
-        arch = [                                                            #  HxW  / InC->OutC
-                Conv2DReflect(512, 3, padding='valid', activation='relu'),  # 32x32 / 512->256
-                UpSampling2D(),
-                Conv2DReflect(512, 3, padding='valid', activation='relu'),  # 32x32 / 512->256
-                Conv2DReflect(512, 3, padding='valid', activation='relu'),  # 32x32 / 512->256
-                Conv2DReflect(512, 3, padding='valid', activation='relu'),  # 32x32 / 512->256
-                # Relu4_1
-                Conv2DReflect(256, 3, padding='valid', activation='relu'),  # 32x32 / 512->256
-                UpSampling2D(),                                             # 32x32 -> 64x64
-                Conv2DReflect(256, 3, padding='valid', activation='relu'),  # 64x64 / 256->256
-                Conv2DReflect(256, 3, padding='valid', activation='relu'),  # 64x64 / 256->256
-                Conv2DReflect(256, 3, padding='valid', activation='relu'),  # 64x64 / 256->256
-                # Relu3_1
-                Conv2DReflect(128, 3, padding='valid', activation='relu'),  # 64x64 / 256->128
-                UpSampling2D(),                                             # 64x64 -> 128x128
-                Conv2DReflect(128, 3, padding='valid', activation='relu'),  # 128x128 / 128->128
-                Conv2DReflect(64, 3, padding='valid', activation='relu'),   # 128x128 / 128->64
-                UpSampling2D(),                                             # 128x128 -> 256x256
-                Conv2DReflect(64, 3, padding='valid', activation='relu'),   # 256x256 / 64->64
-                Conv2DReflect(3, 3, padding='valid', activation=None)]      # 256x256 / 64->3
-        
+    def build_decoder(self, input_shape, target_relu=5): 
+        decoder_archs = {
+            5: [ #    layer    filts kern    HxW  / InC->OutC                                     
+                (Conv2DReflect, 512, 3),  # 16x16 / 512->512
+                (UpSampling2D,),          # 16x16 -> 32x32
+                (Conv2DReflect, 512, 3),  # 32x32 / 512->512
+                (Conv2DReflect, 512, 3),  # 32x32 / 512->512
+                (Conv2DReflect, 512, 3)], # 32x32 / 512->512
+            4: [
+                (Conv2DReflect, 256, 3),  # 32x32 / 512->256
+                (UpSampling2D,),          # 32x32 -> 64x64
+                (Conv2DReflect, 256, 3),  # 64x64 / 256->256
+                (Conv2DReflect, 256, 3),  # 64x64 / 256->256
+                (Conv2DReflect, 256, 3)], # 64x64 / 256->256
+            3: [
+                (Conv2DReflect, 128, 3),  # 64x64 / 256->128
+                (UpSampling2D,),          # 64x64 -> 128x128
+                (Conv2DReflect, 128, 3)], # 128x128 / 128->128
+            2: [
+                (Conv2DReflect, 64, 3),   # 128x128 / 128->64
+                (UpSampling2D,)],         # 128x128 -> 256x256
+            1: [
+                (Conv2DReflect, 64, 3)]   # 256x256 / 64->64
+        }
+
         code = Input(shape=input_shape, name='decoder_input')
         x = code
 
+        # Work backwards from deepest decoder # and build layer by layer
+        decoders = reversed(range(1, target_relu+1))        
+
         with tf.variable_scope('decoder'):
-            for layer in arch:
-                x = layer(x)
-            
-        decoder = Model(code, x, name='decoder_model')
-        print(decoder.summary())
-        return decoder
+            for decoder_num in decoders:
+                for layer_tup in decoder_archs[decoder_num]:
+                    if layer_tup[0] == Conv2DReflect:
+                        x = layer_tup[0](*layer_tup[1:], padding='valid', activation='relu')(x)
+                    elif layer_tup[0] == UpSampling2D:
+                        x = layer_tup[0]()(x)
+        
+        output = Conv2DReflect(3, 3, padding='valid', activation=None)(x)  # 256x256 / 64->3
+        
+        decoder_model = Model(code, output, name='decoder_model')
+        print(decoder_model.summary())
+        return decoder_model
 
     def build_train(self, 
                     batch_size=8,
