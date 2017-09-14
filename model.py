@@ -15,6 +15,11 @@ class AdaINModel(object):
     '''Adaptive Instance Normalization model from https://arxiv.org/abs/1703.06868'''
 
     def __init__(self, mode='train', vgg_weights=None, *args, **kwargs):
+        # Setup flags
+        self.compute_content =  tf.placeholder_with_default(tf.constant(True), shape=[])
+        self.compute_style   =  tf.placeholder_with_default(tf.constant(False), shape=[])
+        self.apply_wct       =  tf.placeholder_with_default(tf.constant(False), shape=[])
+
         # Build the graph
         self.build_model(vgg_weights)
 
@@ -25,13 +30,9 @@ class AdaINModel(object):
     def build_model(self, vgg_weights):
         batch_shape = (None, None, None, 3)
 
-        self.compute_content =  tf.placeholder_with_default(tf.constant(True), shape=[])
-        self.compute_style   =  tf.placeholder_with_default(tf.constant(False), shape=[])
-        self.apply_wct       = tf.placeholder_with_default(tf.constant(False), shape=[])
-
         ### Load shared VGG model up to relu4_1
         with tf.name_scope('encoder'):
-            self.vgg_model = vgg_from_t7(vgg_weights, target_layer='relu5_1')
+            self.vgg_model = vgg_from_t7(vgg_weights, target_layer='relu4_1')
         print(self.vgg_model.summary())
 
         ### Build encoder for reluX_1
@@ -39,7 +40,7 @@ class AdaINModel(object):
             self.content_imgs = tf.placeholder_with_default(tf.constant([[[[0.,0.,0.]]]]), shape=batch_shape, name='content_imgs')
 
             # Build content layer encoding model
-            content_layer = self.vgg_model.get_layer('relu5_1').output
+            content_layer = self.vgg_model.get_layer('relu4_1').output
             self.content_encoder_model = Model(inputs=self.vgg_model.input, outputs=content_layer)
 
             # Setup content layer encodings for content images
@@ -73,7 +74,7 @@ class AdaINModel(object):
         # Content layer encoding for stylized out
         self.decoded_encoded = self.content_encoder_model(self.decoded)
 
-    def build_decoder(self, input_shape, target_relu=5): 
+    def build_decoder(self, input_shape, target_relu=4): 
         decoder_archs = {
             5: [ #    layer    filts kern    HxW  / InC->OutC                                     
                 (Conv2DReflect, 512, 3),  # 16x16 / 512->512
@@ -112,7 +113,7 @@ class AdaINModel(object):
                     elif layer_tup[0] == UpSampling2D:
                         x = layer_tup[0]()(x)
         
-        output = Conv2DReflect(3, 3, padding='valid', activation=None)(x)  # 256x256 / 64->3
+            output = Conv2DReflect(3, 3, padding='valid', activation=None)(x)  # 256x256 / 64->3
         
         decoder_model = Model(code, output, name='decoder_model')
         print(decoder_model.summary())
