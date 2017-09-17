@@ -15,17 +15,6 @@ def Conv2DReflect(*args, **kwargs):
     return Lambda(lambda x: Conv2D(*args, **kwargs)(pad_reflect(x)))
 
 
-### Losses ###
-
-def mse(x,y):
-    '''Mean Squared Error'''
-    return tf.reduce_mean(tf.square(x - y))
-
-def sse(x,y):
-    '''Sum of Squared Error'''
-    return tf.reduce_sum(tf.square(x - y))
-
-
 ### Misc ###
 
 def torch_decay(learning_rate, global_step, decay_rate, name=None):

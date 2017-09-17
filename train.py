@@ -25,8 +25,8 @@ parser.add_argument('--vgg-path', type=str,
                     default='models/vgg_normalised.t7')
 
 ### Loss weights
-parser.add_argument('--content-weight', type=float,
-                    dest='content_weight',
+parser.add_argument('--feature-weight', type=float,
+                    dest='feature_weight',
                     default=1)
 parser.add_argument('--pixel-weight', type=float,
                     dest='pixel_weight',
@@ -34,11 +34,6 @@ parser.add_argument('--pixel-weight', type=float,
 parser.add_argument('--tv-weight', type=float,
                     dest='tv_weight',
                     default=0)
-
-### Model opts
-parser.add_argument('--gram', action='store_true', 
-                    help='Use gram matrices for style loss instead of mean/std',
-                    default=False)
 
 ### Train opts
 parser.add_argument('--learning-rate', type=float,
@@ -68,7 +63,7 @@ args = parser.parse_args()
 
 
 def batch_gen(folder, batch_shape):
-    '''Resize images to 512, randomly crop a 512 square, and normalize'''
+    '''Resize images to 256, randomly crop a 256 square, and normalize'''
     files = np.asarray(get_files(folder))
     while True:
         X_batch = np.zeros(batch_shape, dtype=np.float32)
@@ -79,7 +74,7 @@ def batch_gen(folder, batch_shape):
             try:
                 f = np.random.choice(files)
 
-                X_batch[idx] = get_img_random_crop(f, resize=768, crop=512).astype(np.float32)
+                X_batch[idx] = get_img_random_crop(f, resize=512, crop=256).astype(np.float32)
                 X_batch[idx] /= 255.    # Normalize between [0,1]
                 
                 assert(not np.isnan(X_batch[idx].min()))
@@ -93,7 +88,7 @@ def batch_gen(folder, batch_shape):
 
 
 def train():
-    batch_shape = (args.batch_size,512,512,3)
+    batch_shape = (args.batch_size,256,256,3)
 
     with tf.Graph().as_default():
         tf.logging.set_verbosity(tf.logging.INFO)
@@ -101,7 +96,7 @@ def train():
         ### Setup data loading queue
         queue_input_content = tf.placeholder(tf.float32, shape=batch_shape)
         queue_input_style = tf.placeholder(tf.float32, shape=batch_shape)
-        queue = tf.FIFOQueue(capacity=100, dtypes=[tf.float32, tf.float32], shapes=[[512,512,3], [512,512,3]])
+        queue = tf.FIFOQueue(capacity=100, dtypes=[tf.float32, tf.float32], shapes=[[256,256,3], [256,256,3]])
         enqueue_op = queue.enqueue_many([queue_input_content, queue_input_style])
         dequeue_op = queue.dequeue()
         content_batch_op, val_batch_op = tf.train.batch(dequeue_op, batch_size=args.batch_size, capacity=100)
@@ -118,14 +113,14 @@ def train():
 
         ### Build the model graph and train/summary ops
         model = AdaINModel(mode='train',
+                           relu_target='relu4_1',
                            vgg_weights=args.vgg_path,
                            batch_size=args.batch_size,
-                           content_weight=args.content_weight, 
+                           feature_weight=args.feature_weight, 
                            pixel_weight=args.pixel_weight,
                            tv_weight=args.tv_weight,
                            learning_rate=args.learning_rate,
-                           lr_decay=args.lr_decay,
-                           use_gram=args.gram)
+                           lr_decay=args.lr_decay).encoder_decoder
 
         saver = tf.train.Saver(max_to_keep=None)
 
@@ -159,12 +154,12 @@ def train():
                     'global_step':  model.global_step,
                     # 'summary':      model.summary_op,
                     'lr':           model.learning_rate,
-                    'content_loss': model.content_loss,
+                    'feature_loss': model.feature_loss,
                     'pixel_loss':   model.pixel_loss,
                     'tv_loss':      model.tv_loss
                 }
 
-                feed_dict = { model.content_imgs: content_batch }
+                feed_dict = { model.content_input: content_batch }
 
                 try:
                     results = sess.run(fetches, feed_dict=feed_dict)
@@ -178,9 +173,8 @@ def train():
 
                 ### Run a val batch and log the summaries
                 if iteration % args.summary_iter == 0:
-                    print("VALIDATION STEP")
                     val_batch = sess.run(val_batch_op)
-                    summary = sess.run(model.summary_op, feed_dict={ model.content_imgs: val_batch })
+                    summary = sess.run(model.summary_op, feed_dict={ model.content_input: val_batch })
                     summary_writer.add_summary(summary, results['global_step'])
 
                 ### Save checkpoint
@@ -189,7 +183,7 @@ def train():
                     print("Model saved in file: %s" % save_path)
 
                 ### Log training stats
-                print("Step: {}  LR: {:.7f}  Content: {:.5f}  Pixel: {:.5f}  TV: {:.5f}  Time: {:.5f}".format(results['global_step'], results['lr'], results['content_loss'], results['pixel_loss'], results['tv_loss'], time.time() - start))
+                print("Step: {}  LR: {:.7f}  Feature: {:.5f}  Pixel: {:.5f}  TV: {:.5f}  Time: {:.5f}".format(results['global_step'], results['lr'], results['feature_loss'], results['pixel_loss'], results['tv_loss'], time.time() - start))
 
             # Last save
             save_path = saver.save(sess, os.path.join(args.checkpoint, 'model.ckpt'), results['global_step'])

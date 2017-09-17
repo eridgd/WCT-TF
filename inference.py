@@ -61,7 +61,7 @@ class AdaINference(object):
         style   = self.preprocess(style)
 
         # if self.style_encoded is None:
-        style_encoded = self.sess.run(self.model.style_encoded, feed_dict={self.model.style_img: style,
+        style_encoded = self.sess.run(self.model.style_encoded, feed_dict={self.model.style_input: style,
                                                                            self.model.compute_style: True,
                                                                            self.model.compute_content: False})
 
@@ -69,7 +69,7 @@ class AdaINference(object):
         s = time.time()
         # print("style")
         # print(style_encoded)
-        content_encoded = self.sess.run(self.encoded, feed_dict={self.content_imgs: content,
+        content_encoded = self.sess.run(self.encoded, feed_dict={self.model.content_input: content,
                                                                  self.model.compute_content: True})
         # print("content")
         # print(content_encoded)
