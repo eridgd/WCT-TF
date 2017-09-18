@@ -44,7 +44,10 @@ class StyleWindow(object):
     '''Helper class to handle style image settings'''
 
     def __init__(self, style_path, img_size=512, crop_size=512, scale=1, alpha=1, interpolate=False):
-        self.style_imgs = get_files(style_path)
+        if os.path.isdir(style_path):
+            self.style_imgs = get_files(style_path)
+        else:
+            self.style_imgs = [style_path]  # Single image instead of folder
 
         # Create room for two styles for interpolation
         self.style_rgbs = [None, None]
@@ -160,7 +163,7 @@ def main():
 
             if args.noise:  # Generate textures from noise instead of images
                 frame_resize = np.random.randint(0, 256, frame_resize.shape, np.uint8)
-                frame_resize = gaussian_filter(frame_resize, sigma=0.5)
+                frame_resize = gaussian_filter(frame_resize, sigma=1)
 
             count += 1
             print("Frame:",count,"Orig shape:",frame.shape,"New shape",frame_resize.shape)
