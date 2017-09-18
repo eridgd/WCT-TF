@@ -3,7 +3,7 @@ from utils import save_img
 import tensorflow as tf
 
 
-def wct_tf(content, style, alpha, eps=1e-6):
+def wct_tf(content, style, alpha, eps=1):
     '''TF/GPU version of Whiten-Color Transform
        Assume that 1) content/style encodings are stacked in first two rows
        and 2) they have shape format HxWxC
@@ -48,7 +48,7 @@ def wct_tf(content, style, alpha, eps=1e-6):
 
     fcs_hat = fcs_hat + ms
 
-    blended = alpha * fcs_hat + (1 - alpha) * fc
+    blended = alpha * fcs_hat + (1 - alpha) * (fc + mc)
 
     # CxH*W -> CxHxW
     blended = tf.reshape(blended, (C,H,W))

@@ -15,7 +15,8 @@ from inference import AdaINference
 parser = argparse.ArgumentParser()
 parser.add_argument('-src', '--source', dest='video_source', type=int,
                     default=0, help='Device index of the camera.')
-parser.add_argument('--checkpoint', type=str, help='Checkpoint directory', required=True)
+parser.add_argument('--checkpoints', nargs='+', type=str, help='List of checkpoint directories', required=True)
+parser.add_argument('--relu-targets', nargs='+', type=str, help='List of reluX_1 layers, corresponding to --checkpoints', required=True)
 parser.add_argument('--style-path', type=str, dest='style_path', help='Style images folder', required=True)
 parser.add_argument('--vgg-path', type=str,
                     dest='vgg_path', help='Path to vgg_normalised.t7', 
@@ -118,7 +119,10 @@ class StyleWindow(object):
 
 def main():
     # Load the AdaIN model
-    ada_in = AdaINference(args.checkpoint, args.vgg_path, device=args.device)
+    ada_in = AdaINference(checkpoints=args.checkpoints, 
+                          relu_targets=args.relu_targets,
+                          vgg_path=args.vgg_path, 
+                          device=args.device)
 
     # Load a panel to control style settings
     style_window = StyleWindow(args.style_path, args.style_size, args.crop_size, args.scale, args.alpha, args.interpolate)

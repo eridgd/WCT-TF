@@ -30,18 +30,12 @@ class AdaINModel(object):
     def __init__(self, mode='train', relu_targets=['relu3_1'], vgg_path=None,  *args, **kwargs):
         self.mode = mode
 
-        # Setup flags
-        if mode == 'train':
-            apply_wct = False
-            # TODO fix this nonsense and don't build train ops with cond statements
-            self.style_input = tf.constant([[[[0.,0.,0.]]]])
-        else:
-            apply_wct = True
-            self.style_input = tf.placeholder(dtype=tf.float32, name='style_input')
+        self.style_input = tf.placeholder_with_default(tf.constant([[[[0.,0.,0.]]]]), shape=(None, None, None, 3), name='style_img')
 
+        # Setup flags
         self.compute_content =  tf.placeholder_with_default(tf.constant(True), shape=[])
-        self.apply_wct       =  tf.placeholder_with_default(tf.constant(apply_wct), shape=[])
-        self.compute_style   =  tf.placeholder_with_default(self.apply_wct, shape=[])
+        self.compute_style   =  tf.placeholder_with_default(tf.constant(False), shape=[])
+        self.apply_wct       =  tf.placeholder_with_default(tf.constant(False), shape=[])
 
         self.alpha = tf.placeholder_with_default(1., shape=[], name='alpha')
 
@@ -63,8 +57,8 @@ class AdaINModel(object):
                 # Input tensor will be a placeholder for the first decoder
                 input_tensor = None
             else:
-                # Input to intermediate levels is the output from previous decoder
-                input_tensor = self.encoder_decoders[-1].decoded
+                # Input to intermediate levels is the (clipped) output from previous decoder
+                input_tensor = clip(self.encoder_decoders[-1].decoded)
 
             enc_dec = self.build_model(relu, input_tensor=input_tensor, **kwargs)
         
@@ -87,6 +81,7 @@ class AdaINModel(object):
             ### Build encoder for reluX_1
             with tf.name_scope('content_encoder_'+relu_target):
                 if input_tensor is None:  # This is the first level encoder that takes original content imgs
+
                     content_imgs = tf.placeholder_with_default(tf.constant([[[[0.,0.,0.]]]]), shape=(None, None, None, 3), name='content_imgs')
                 else:                     # This is an intermediate-level encoder that takes output tensor from previous level as input
                     content_imgs = input_tensor  
@@ -96,7 +91,8 @@ class AdaINModel(object):
                 content_encoder_model = Model(inputs=self.vgg_model.input, outputs=content_layer)
 
                 # Setup content layer encodings for content images
-                content_encoded = tf.cond(self.compute_content, lambda: content_encoder_model(content_imgs), lambda: tf.constant([[[[0.,0.,0.]]]]))
+                zeros = np.zeros((1,1,1,content_layer.get_shape()[-1]), dtype=np.float32)
+                content_encoded = tf.cond(self.compute_content, lambda: content_encoder_model(content_imgs), lambda: tf.constant(zeros))
 
             # TODO: encode style once at beginning of process and use those output tensors as input to model building
             # TODO: only build this if in test mode
