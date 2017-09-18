@@ -29,7 +29,7 @@ parser.add_argument('--vgg-path', type=str,
 ### Loss weights
 parser.add_argument('--feature-weight', type=float,
                     dest='feature_weight',
-                    default=1)
+                    default=1e-2)
 parser.add_argument('--pixel-weight', type=float,
                     dest='pixel_weight',
                     default=1)
@@ -116,7 +116,7 @@ def train():
         ### Build the model graph and train/summary ops
         model = AdaINModel(mode='train',
                            relu_targets=[args.relu_target],
-                           vgg_weights=args.vgg_path,
+                           vgg_path=args.vgg_path,
                            batch_size=args.batch_size,
                            feature_weight=args.feature_weight, 
                            pixel_weight=args.pixel_weight,

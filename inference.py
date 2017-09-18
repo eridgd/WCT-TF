@@ -12,7 +12,7 @@ from coral import coral_numpy
 class AdaINference(object):
     '''Styilze images with trained AdaIN model'''
 
-    def __init__(self, checkpoints, vgg_weights, device='/gpu:0'): 
+    def __init__(self, checkpoints, vgg_path, device='/gpu:0'): 
         '''
             Args:
                 checkpoint_dir: Path to trained model checkpoint
@@ -20,10 +20,10 @@ class AdaINference(object):
         '''       
         graph = tf.get_default_graph()
 
-        relu_targets = ['relu5_1','relu4_1']
+        relu_targets = ['relu5_1','relu4_1','relu3_1']
 
         with graph.device(device):
-            self.model = AdaINModel(mode='test', relu_targets=['relu5_1','relu4_1'], vgg_weights=vgg_weights)
+            self.model = AdaINModel(mode='test', relu_targets=['relu5_1','relu4_1','relu3_1'], vgg_path=vgg_path)
             
             self.content_input = self.model.content_input
             # self.encoded = self.model.
@@ -37,7 +37,7 @@ class AdaINference(object):
 
             self.sess.run(tf.global_variables_initializer())
 
-            ckpts = ['/home/rachael/Downloads/tflogs/wct/multi_relu5_1_f1e-2/','/home/rachael/Downloads/tflogs/wct/multi_relu4_1_f1e-2/']
+            ckpts = ['/home/rachael/Downloads/tflogs/wct/multi_relu5_1_f1e-2/','/home/rachael/Downloads/tflogs/wct/multi_relu4_1_f1e-2/','/home/rachael/Downloads/tflogs/wct/multi_relu3_1_f1e-2/']
 
             for relu_target, checkpoint_dir in zip(relu_targets, ckpts):
                 decoder_prefix = 'decoder_{}'.format(relu_target)
@@ -79,7 +79,7 @@ class AdaINference(object):
         stylized = self.sess.run(self.decoded_output, feed_dict={
                                                           self.content_input: content,
                                                           self.model.style_input: style,
-                                                          self.model.compute_content: True,
+                                                          # self.model.compute_content: True,
                                                           # self.model.compute_style: True,
                                                           self.model.apply_wct: True,
                                                           self.model.alpha: alpha})

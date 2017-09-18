@@ -27,12 +27,13 @@ EncoderDecoder = namedtuple('EncoderDecoder',
 class AdaINModel(object):
     '''Adaptive Instance Normalization model from https://arxiv.org/abs/1703.06868'''
 
-    def __init__(self, mode='train', relu_targets=['relu5_1', 'relu4_1'], vgg_weights=None,  *args, **kwargs):
+    def __init__(self, mode='train', relu_targets=['relu3_1'], vgg_path=None,  *args, **kwargs):
         self.mode = mode
 
         # Setup flags
         if mode == 'train':
             apply_wct = False
+            # TODO fix this nonsense and don't build train ops with cond statements
             self.style_input = tf.constant([[[[0.,0.,0.]]]])
         else:
             apply_wct = True
@@ -51,13 +52,15 @@ class AdaINModel(object):
         with tf.name_scope('vgg_encoder'):
             deepest_target = sorted(relu_targets)[-1]
             print('Loading VGG up to layer',deepest_target)
-            self.vgg_model = vgg_from_t7(vgg_weights, target_layer=deepest_target)
+            self.vgg_model = vgg_from_t7(vgg_path, target_layer=deepest_target)
         print(self.vgg_model.summary())
 
         #### Build the encoder/decoders
         for i, relu in enumerate(relu_targets):
             print('Building decoder for relu target',relu)
-            if i == 0:
+            
+            if i == 0: 
+                # Input tensor will be a placeholder for the first decoder
                 input_tensor = None
             else:
                 # Input to intermediate levels is the output from previous decoder
@@ -71,22 +74,20 @@ class AdaINModel(object):
         self.decoded_output = self.encoder_decoders[-1].decoded
         
     def build_model(self, 
-                    relu_target, 
-                    input_tensor, 
+                    relu_target,
+                    input_tensor,
                     batch_size=8,
-                    feature_weight=1, 
-                    pixel_weight=1, 
+                    feature_weight=1e-2,
+                    pixel_weight=1,
                     tv_weight=0,
-                    learning_rate=1e-4, 
+                    learning_rate=1e-4,
                     lr_decay=5e-5):
-        batch_shape = (None, None, None, 3)
-
         with tf.name_scope('encoder_decoder_'+relu_target):
 
             ### Build encoder for reluX_1
             with tf.name_scope('content_encoder_'+relu_target):
                 if input_tensor is None:  # This is the first level encoder that takes original content imgs
-                    content_imgs = tf.placeholder_with_default(tf.constant([[[[0.,0.,0.]]]]), shape=batch_shape, name='content_imgs')
+                    content_imgs = tf.placeholder_with_default(tf.constant([[[[0.,0.,0.]]]]), shape=(None, None, None, 3), name='content_imgs')
                 else:                     # This is an intermediate-level encoder that takes output tensor from previous level as input
                     content_imgs = input_tensor  
 
@@ -95,8 +96,7 @@ class AdaINModel(object):
                 content_encoder_model = Model(inputs=self.vgg_model.input, outputs=content_layer)
 
                 # Setup content layer encodings for content images
-                zeros = np.zeros((1,1,1,content_layer.get_shape()[-1]), dtype=np.float32)
-                content_encoded = tf.cond(self.compute_content, lambda: content_encoder_model(content_imgs), lambda: tf.constant(zeros))
+                content_encoded = tf.cond(self.compute_content, lambda: content_encoder_model(content_imgs), lambda: tf.constant([[[[0.,0.,0.]]]]))
 
             # TODO: encode style once at beginning of process and use those output tensors as input to model building
             # TODO: only build this if in test mode
