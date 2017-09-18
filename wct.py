@@ -16,7 +16,7 @@ def wct_tf(content, style, alpha, eps=1e-6):
     style_t = tf.transpose(tf.squeeze(style), (2, 0, 1))
 
     C, H, W = tf.unstack(tf.shape(content_t))
-    _, Hs, Ws = tf.unstack(tf.shape(style_t))
+    Cs, Hs, Ws = tf.unstack(tf.shape(style_t))
 
     # CxHxW -> CxH*W
     content_flat = tf.reshape(content_t, (C, H*W))
@@ -26,7 +26,7 @@ def wct_tf(content, style, alpha, eps=1e-6):
     mc = tf.reduce_mean(content_flat, axis=1, keep_dims=True)
     fc = content_flat - mc
 
-    fcfc = tf.matmul(fc, fc, transpose_b=True) / (tf.cast(H*W, tf.float32) - tf.constant(1.))
+    fcfc = tf.matmul(fc, fc, transpose_b=True) / (tf.cast(H*W, tf.float32) - tf.constant(1.)) + tf.eye(C)*eps
     
     Sc, Uc, Vc = tf.svd(fcfc, full_matrices=True)
 
@@ -38,7 +38,7 @@ def wct_tf(content, style, alpha, eps=1e-6):
     ms = tf.reduce_mean(style_flat, axis=1, keep_dims=True)
     fs = style_flat - ms
 
-    fsfs = tf.matmul(fs, tf.transpose(fs)) / (tf.cast(Hs*Ws, tf.float32) - tf.constant(1.))
+    fsfs = tf.matmul(fs, tf.transpose(fs)) / (tf.cast(Hs*Ws, tf.float32) - tf.constant(1.)) + tf.eye(Cs)*eps
 
     Ss, Us, Vs = tf.svd(fsfs, full_matrices=True)
     

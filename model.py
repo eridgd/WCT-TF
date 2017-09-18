@@ -10,12 +10,14 @@ from ops import pad_reflect, Conv2DReflect, torch_decay
 import functools
 from collections import namedtuple
 from wct import wct_tf
-mse = tf.losses.mean_squared_error
 
+### Helpers
+mse = tf.losses.mean_squared_error
+clip = lambda x: tf.clip_by_value(x, 0, 1)
 
 EncoderDecoder = namedtuple('EncoderDecoder', 
                             'content_input content_encoder_model content_encoded \
-                             style_input style_encoded \
+                             style_encoded \
                              decoder_input, decoder_model decoded decoded_encoded \
                              pixel_loss feature_loss tv_loss total_loss \
                              train_op learning_rate global_step \
@@ -25,26 +27,48 @@ EncoderDecoder = namedtuple('EncoderDecoder',
 class AdaINModel(object):
     '''Adaptive Instance Normalization model from https://arxiv.org/abs/1703.06868'''
 
-    def __init__(self, mode='train', relu_target='relu5_1', vgg_weights=None,  *args, **kwargs):
+    def __init__(self, mode='train', relu_targets=['relu5_1', 'relu4_1'], vgg_weights=None,  *args, **kwargs):
         self.mode = mode
 
         # Setup flags
+        if mode == 'train':
+            apply_wct = False
+            self.style_input = tf.constant([[[[0.,0.,0.]]]])
+        else:
+            apply_wct = True
+            self.style_input = tf.placeholder(dtype=tf.float32, name='style_input')
+
         self.compute_content =  tf.placeholder_with_default(tf.constant(True), shape=[])
-        self.apply_wct       =  tf.placeholder_with_default(tf.constant(False), shape=[])
+        self.apply_wct       =  tf.placeholder_with_default(tf.constant(apply_wct), shape=[])
         self.compute_style   =  tf.placeholder_with_default(self.apply_wct, shape=[])
 
         self.alpha = tf.placeholder_with_default(1., shape=[], name='alpha')
 
-        self.encoder_decoder = None
+        self.encoder_decoders = []
         
         #### Build the graph
-        # Load shared VGG model up to target layer
+        # Load shared VGG model up to deepest target layer
         with tf.name_scope('vgg_encoder'):
-            self.vgg_model = vgg_from_t7(vgg_weights, target_layer=relu_target)
+            deepest_target = sorted(relu_targets)[-1]
+            print('Loading VGG up to layer',deepest_target)
+            self.vgg_model = vgg_from_t7(vgg_weights, target_layer=deepest_target)
         print(self.vgg_model.summary())
 
-        #### Build the encoder/decoder
-        self.build_model(relu_target, input_tensor=None, **kwargs)
+        #### Build the encoder/decoders
+        for i, relu in enumerate(relu_targets):
+            print('Building decoder for relu target',relu)
+            if i == 0:
+                input_tensor = None
+            else:
+                # Input to intermediate levels is the output from previous decoder
+                input_tensor = self.encoder_decoders[-1].decoded
+
+            enc_dec = self.build_model(relu, input_tensor=input_tensor, **kwargs)
+        
+            self.encoder_decoders.append(enc_dec)
+
+        self.content_input  = self.encoder_decoders[0].content_input
+        self.decoded_output = self.encoder_decoders[-1].decoded
         
     def build_model(self, 
                     relu_target, 
@@ -75,10 +99,10 @@ class AdaINModel(object):
                 content_encoded = tf.cond(self.compute_content, lambda: content_encoder_model(content_imgs), lambda: tf.constant(zeros))
 
             # TODO: encode style once at beginning of process and use those output tensors as input to model building
+            # TODO: only build this if in test mode
             ### Build style encoder if applying WCT
             with tf.name_scope('style_encoder_'+relu_target):
-                style_img = tf.placeholder_with_default(content_imgs, shape=batch_shape, name='style_img')
-                style_encoded = tf.cond(self.compute_style, lambda: content_encoder_model(style_img), lambda: content_encoded)
+                style_encoded = tf.cond(self.compute_style, lambda: content_encoder_model(self.style_input), lambda: content_encoded)
                 
             ### Apply WCT if inference. During training pass through content_encoded unchanged.
             with tf.name_scope('wct_'+relu_target):
@@ -119,7 +143,7 @@ class AdaINModel(object):
                 global_step = tf.Variable(0, name='global_step_train', trainable=False)
                 # self.learning_rate = tf.train.exponential_decay(learning_rate, self.global_step, 100, 0.96, staircase=False)
                 learning_rate = torch_decay(learning_rate, global_step, lr_decay)
-                d_optimizer = tf.train.AdamOptimizer(learning_rate, beta1=0.9, beta2=0.9)
+                d_optimizer = tf.train.AdamOptimizer(learning_rate, beta1=0.9, beta2=0.999)
 
                 t_vars = tf.trainable_variables()
                 d_vars = [var for var in t_vars if 'decoder' in var.name]  # Only train decoder vars, encoder is frozen
@@ -133,7 +157,6 @@ class AdaINModel(object):
                 tv_loss_summary = tf.summary.scalar('tv_loss', tv_loss)
                 total_loss_summary = tf.summary.scalar('total_loss', total_loss)
 
-                clip = lambda x: tf.clip_by_value(x, 0, 1)
                 content_imgs_summary = tf.summary.image('content_imgs', content_imgs)
                 decoded_images_summary = tf.summary.image('decoded_images', clip(decoded))
                 
@@ -143,13 +166,12 @@ class AdaINModel(object):
                 summary_op = tf.summary.merge_all()
         # For inference set unnneeded ops to None
         else:                     
-            pixel_loss, feature_loss, total_loss, train_op, global_step, summary_op = [None]*6
+            pixel_loss, feature_loss, tv_loss, total_loss, train_op, global_step, summary_op = [None]*7
 
         # Put it all together in a namedtuple
         encoder_decoder = EncoderDecoder(content_input=content_imgs, 
                                          content_encoder_model=content_encoder_model,
                                          content_encoded=content_encoded,
-                                         style_input=style_img,
                                          style_encoded=style_encoded,
                                          decoder_input=decoder_input,
                                          decoder_model=decoder_model,
@@ -164,7 +186,7 @@ class AdaINModel(object):
                                          learning_rate=learning_rate,
                                          summary_op=summary_op)
         
-        self.encoder_decoder = encoder_decoder
+        return encoder_decoder
 
     def build_decoder(self, input_shape, relu_target): 
         decoder_num = dict(zip(['relu1_1', 'relu2_1', 'relu3_1', 'relu4_1', 'relu5_1'], range(1,6)))[relu_target]
@@ -193,23 +215,25 @@ class AdaINModel(object):
                 (Conv2DReflect, 64, 3)]   # 256x256 / 64->64
         }
 
-        print('Building decoder {} from layer'.format(relu_target, decoder_num))
-
         code = Input(shape=input_shape, name='decoder_input_'+relu_target)
         x = code
 
         ### Work backwards from deepest decoder # and build layer by layer
-        decoders = reversed(range(1, decoder_num+1))        
+        decoders = reversed(range(1, decoder_num+1))
 
-        with tf.variable_scope('decoder_'+relu_target):
-            for decoder_num in decoders:
-                for layer_tup in decoder_archs[decoder_num]:
-                    if layer_tup[0] == Conv2DReflect:
-                        x = layer_tup[0](*layer_tup[1:], padding='valid', activation='relu')(x)
-                    elif layer_tup[0] == UpSampling2D:
-                        x = layer_tup[0]()(x)
-        
-            output = Conv2DReflect(3, 3, padding='valid', activation=None)(x)  # 256x256 / 64->3
+        count = 0        
+
+        for decoder_num in decoders:
+            for layer_tup in decoder_archs[decoder_num]:
+                layer_name = '{}_{}'.format(relu_target, count)
+                if layer_tup[0] == Conv2DReflect:
+                    x = layer_tup[0](layer_name, *layer_tup[1:], padding='valid', activation='relu', name=layer_name)(x)
+                elif layer_tup[0] == UpSampling2D:
+                    x = layer_tup[0](name=layer_name)(x)
+                count += 1
+
+        layer_name = '{}_{}'.format(relu_target, count)
+        output = Conv2DReflect(layer_name, 3, 3, padding='valid', activation=None, name=layer_name)(x)  # 256x256 / 64->3
         
         decoder_model = Model(code, output, name='decoder_model_'+relu_target)
         print(decoder_model.summary())

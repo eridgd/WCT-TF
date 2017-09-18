@@ -11,8 +11,8 @@ def pad_reflect(x, padding=1):
       x, [[0, 0], [padding, padding], [padding, padding], [0, 0]],
       mode='REFLECT')
 
-def Conv2DReflect(*args, **kwargs):
-    return Lambda(lambda x: Conv2D(*args, **kwargs)(pad_reflect(x)))
+def Conv2DReflect(lambda_name, *args, **kwargs):
+    return Lambda(lambda x: Conv2D(*args, **kwargs)(pad_reflect(x)), name=lambda_name)
 
 
 ### Misc ###

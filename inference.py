@@ -12,7 +12,7 @@ from coral import coral_numpy
 class AdaINference(object):
     '''Styilze images with trained AdaIN model'''
 
-    def __init__(self, checkpoint_dir, vgg_weights, device='/gpu:0'): 
+    def __init__(self, checkpoints, vgg_weights, device='/gpu:0'): 
         '''
             Args:
                 checkpoint_dir: Path to trained model checkpoint
@@ -20,12 +20,14 @@ class AdaINference(object):
         '''       
         graph = tf.get_default_graph()
 
+        relu_targets = ['relu5_1','relu4_1']
+
         with graph.device(device):
-            self.model = AdaINModel(mode='test', vgg_weights=vgg_weights)
+            self.model = AdaINModel(mode='test', relu_targets=['relu5_1','relu4_1'], vgg_weights=vgg_weights)
             
-            self.content_imgs = self.model.content_imgs
-            self.encoded = self.model.content_encoded
-            self.decoded = self.model.decoded
+            self.content_input = self.model.content_input
+            # self.encoded = self.model.
+            self.decoded_output = self.model.decoded_output
             self.style_encoded = None
 
             config = tf.ConfigProto(allow_soft_placement=True)
@@ -33,12 +35,19 @@ class AdaINference(object):
             sess = tf.Session(config=config)
             self.sess = sess
 
-            saver = tf.train.Saver()
+            self.sess.run(tf.global_variables_initializer())
 
-            if os.path.isdir(checkpoint_dir):
+            ckpts = ['/home/rachael/Downloads/tflogs/wct/multi_relu5_1_f1e-2/','/home/rachael/Downloads/tflogs/wct/multi_relu4_1_f1e-2/']
+
+            for relu_target, checkpoint_dir in zip(relu_targets, ckpts):
+                decoder_prefix = 'decoder_{}'.format(relu_target)
+                relu_vars = [v for v in tf.trainable_variables() if decoder_prefix in v.name]
+
+                saver = tf.train.Saver(var_list=relu_vars)
+                
                 ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
                 if ckpt and ckpt.model_checkpoint_path:
-                    print("Restoring from checkpoint", ckpt.model_checkpoint_path)
+                    print("Restoring vars for {} from checkpoint {}".format(relu_target, ckpt.model_checkpoint_path))
                     saver.restore(self.sess, ckpt.model_checkpoint_path)
                 else:
                     raise Exception("No checkpoint found...")
@@ -53,44 +62,6 @@ class AdaINference(object):
     def postprocess(image):
         return np.uint8(np.clip(image, 0, 1) * 255)
 
-    def predict_np(self, content, style, alpha=1):
-        '''Stylize a single content/style pair with numpy WCT
-           Assumes that images are RGB [0,255]
-        '''
-        content = self.preprocess(content)
-        style   = self.preprocess(style)
-
-        # if self.style_encoded is None:
-        style_encoded = self.sess.run(self.model.style_encoded, feed_dict={self.model.style_input: style,
-                                                                           self.model.compute_style: True,
-                                                                           self.model.compute_content: False})
-
-        
-        s = time.time()
-        # print("style")
-        # print(style_encoded)
-        content_encoded = self.sess.run(self.encoded, feed_dict={self.model.content_input: content,
-                                                                 self.model.compute_content: True})
-        # print("content")
-        # print(content_encoded)
-        encoded_wct = wct_np(content_encoded.squeeze(), style_encoded.squeeze(), alpha)
-        # print("wct")
-        # print(encoded_wct)
-
-        stylized = self.sess.run(self.decoded, feed_dict={self.model.decoder_input: np.expand_dims(encoded_wct, 0)})
-        # stylized = self.sess.run(self.decoded, feed_dict={
-        #                                                   self.content_imgs: content,
-        #                                                   self.model.style_img: style,
-        #                                                   self.model.compute_content: True,
-        #                                                   self.model.compute_style: True,
-        #                                                   self.model.apply_wct: True,
-        #                                                   self.model.alpha: alpha})
-        print(time.time() - s)
-        
-
-        return self.postprocess(stylized[0])
-
-
     def predict(self, content, style, alpha=1):
         '''Stylize a single content/style pair
            Assumes that images are RGB [0,255]
@@ -103,23 +74,61 @@ class AdaINference(object):
         #                                                                       self.model.compute_style: True})
         #     print("Computed style encoded")
 
-        # content_encoded = self.sess.run(self.encoded, feed_dict={self.content_imgs: content})
+        # content_encoded = self.sess.run(self.encoded, feed_dict={self.content_input: content})
         s = time.time()
-        stylized = self.sess.run(self.decoded, feed_dict={
-                                                          self.content_imgs: content,
-                                                          self.model.style_img: style,
+        stylized = self.sess.run(self.decoded_output, feed_dict={
+                                                          self.content_input: content,
+                                                          self.model.style_input: style,
                                                           self.model.compute_content: True,
-                                                          self.model.compute_style: True,
+                                                          # self.model.compute_style: True,
                                                           self.model.apply_wct: True,
                                                           self.model.alpha: alpha})
         print(time.time() - s)
-        # style_encoded   = self.sess.run(self.encoded, feed_dict={self.content_imgs: style})
+        # style_encoded   = self.sess.run(self.encoded, feed_dict={self.content_input: style})
 
         # encoded_wct = wct(content_encoded.squeeze(), style_encoded.squeeze(), alpha)
 
         # stylized = self.sess.run(self.decoded, feed_dict={self.encoded_pl: np.expand_dims(encoded_wct, 0)})
 
         return self.postprocess(stylized[0])
+
+    # def predict_np(self, content, style, alpha=1):
+    #     '''Stylize a single content/style pair with numpy WCT
+    #        Assumes that images are RGB [0,255]
+    #     '''
+    #     content = self.preprocess(content)
+    #     style   = self.preprocess(style)
+
+    #     # if self.style_encoded is None:
+    #     style_encoded = self.sess.run(self.model.style_encoded, feed_dict={self.model.style_input: style,
+    #                                                                        self.model.compute_style: True,
+    #                                                                        self.model.compute_content: False})
+
+        
+    #     s = time.time()
+    #     # print("style")
+    #     # print(style_encoded)
+    #     content_encoded = self.sess.run(self.encoded, feed_dict={self.model.content_input: content,
+    #                                                              self.model.compute_content: True})
+    #     # print("content")
+    #     # print(content_encoded)
+    #     encoded_wct = wct_np(content_encoded.squeeze(), style_encoded.squeeze(), alpha)
+    #     # print("wct")
+    #     # print(encoded_wct)
+
+    #     stylized = self.sess.run(self.decoded, feed_dict={self.model.decoder_input: np.expand_dims(encoded_wct, 0)})
+    #     # stylized = self.sess.run(self.decoded, feed_dict={
+    #     #                                                   self.content_input: content,
+    #     #                                                   self.model.style_img: style,
+    #     #                                                   self.model.compute_content: True,
+    #     #                                                   self.model.compute_style: True,
+    #     #                                                   self.model.apply_wct: True,
+    #     #                                                   self.model.alpha: alpha})
+    #     print(time.time() - s)
+        
+
+    #     return self.postprocess(stylized[0])
+
 
     # def predict_batch(self, content_batch, style, alpha=1):
     #     '''Stylize a batch of content imgs with a single style
@@ -129,7 +138,7 @@ class AdaINference(object):
     #     style_batch = np.stack([style]*len(content_batch)) 
     #     style_batch = self.preprocess(style_batch)
 
-    #     stylized = self.sess.run(self.stylized, feed_dict={self.content_imgs: content_batch,
+    #     stylized = self.sess.run(self.stylized, feed_dict={self.content_input: content_batch,
     #                                                        self.style_imgs:   style_batch,
     #                                                        self.alpha_tensor: alpha})
 
@@ -142,7 +151,7 @@ class AdaINference(object):
     #     content_stacked = self.preprocess(content_stacked)
     #     style_stacked = self.preprocess(style_stacked)
 
-    #     encoded = self.sess.run(self.model.adain_encoded, feed_dict={self.content_imgs: content_stacked,
+    #     encoded = self.sess.run(self.model.adain_encoded, feed_dict={self.content_input: content_stacked,
     #                                                                  self.style_imgs:   style_stacked,
     #                                                                  self.alpha_tensor: alpha})
 

@@ -16,6 +16,8 @@ parser.add_argument('--checkpoint', type=str,
                     required=True)
 parser.add_argument('--log-path', type=str,
                     dest='log_path', help='Logging dir path')
+parser.add_argument('--relu-target', type=str, required=True,
+                    help='Target VGG19 relu layer to decode from, e.g. relu4_1')
 parser.add_argument('--content-path', type=str,
                     dest='content_path', help='Content images folder')
 parser.add_argument('--val-path', type=str,
@@ -95,9 +97,9 @@ def train():
 
         ### Setup data loading queue
         queue_input_content = tf.placeholder(tf.float32, shape=batch_shape)
-        queue_input_style = tf.placeholder(tf.float32, shape=batch_shape)
+        queue_input_val = tf.placeholder(tf.float32, shape=batch_shape)
         queue = tf.FIFOQueue(capacity=100, dtypes=[tf.float32, tf.float32], shapes=[[256,256,3], [256,256,3]])
-        enqueue_op = queue.enqueue_many([queue_input_content, queue_input_style])
+        enqueue_op = queue.enqueue_many([queue_input_content, queue_input_val])
         dequeue_op = queue.dequeue()
         content_batch_op, val_batch_op = tf.train.batch(dequeue_op, batch_size=args.batch_size, capacity=100)
 
@@ -109,18 +111,18 @@ def train():
                 val_batch     = next(val_images)
 
                 sess.run(enqueue_op, feed_dict={queue_input_content: content_batch,
-                                                queue_input_style:   val_batch})
+                                                queue_input_val:     val_batch})
 
         ### Build the model graph and train/summary ops
         model = AdaINModel(mode='train',
-                           relu_target='relu4_1',
+                           relu_targets=[args.relu_target],
                            vgg_weights=args.vgg_path,
                            batch_size=args.batch_size,
                            feature_weight=args.feature_weight, 
                            pixel_weight=args.pixel_weight,
                            tv_weight=args.tv_weight,
                            learning_rate=args.learning_rate,
-                           lr_decay=args.lr_decay).encoder_decoder
+                           lr_decay=args.lr_decay).encoder_decoders[0]
 
         saver = tf.train.Saver(max_to_keep=None)
 
