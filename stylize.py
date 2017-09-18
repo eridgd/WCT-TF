@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 import tensorflow as tf
 from utils import preserve_colors_np
-from utils import get_files, get_img, get_img_crop, save_img, resize_to
+from utils import get_files, get_img, get_img_crop, save_img, resize_to, center_crop
 import scipy
 from scipy.ndimage.filters import gaussian_filter
 import time
@@ -16,7 +16,8 @@ from inference import AdaINference
 parser = argparse.ArgumentParser()
 parser.add_argument('-src', '--source', dest='video_source', type=int,
                     default=0, help='Device index of the camera.')
-parser.add_argument('--checkpoint', type=str, help='Checkpoint directory', required=True)
+parser.add_argument('--checkpoints', nargs='+', type=str, help='List of checkpoint directories', required=True)
+parser.add_argument('--relu-targets', nargs='+', type=str, help='List of reluX_1 layers, corresponding to --checkpoints', required=True)
 parser.add_argument('--content-path', type=str, dest='content_path', help='Content image or folder of images')
 parser.add_argument('--style-path', type=str, dest='style_path', help='Style image or folder of images')
 parser.add_argument('--out-path', type=str, dest='out_path', help='Output folder path')
@@ -27,8 +28,8 @@ parser.add_argument('--keep-colors', action='store_true', help="Preserve the col
 parser.add_argument('--device', type=str,
                         dest='device', help='Device to perform compute on',
                         default='/gpu:0')
-parser.add_argument('--style-size', type=int, help="Resize style image to this size before cropping, default 512", default=512)
-parser.add_argument('--crop-size', type=int, help="Crop square size, default 256", default=256)
+parser.add_argument('--style-size', type=int, help="Resize style image to this size before cropping, default 512", default=0)
+parser.add_argument('--crop-size', type=int, help="Crop square size, default 256", default=0)
 parser.add_argument('--content-size', type=int, help="Resize short side of content image to this", default=0)
 parser.add_argument('--passes', type=int, help="# of stylization passes per content image", default=1)
 parser.add_argument('-r','--random', type=int, help="Choose # of random subset of images from style folder", default=0)
@@ -41,7 +42,10 @@ def main():
     start = time.time()
 
     # Load the AdaIN model
-    wct_model = AdaINference(args.checkpoint, args.vgg_path, device=args.device)
+    wct_model = AdaINference(checkpoints=args.checkpoints, 
+                             relu_targets=args.relu_targets,
+                             vgg_path=args.vgg_path, 
+                             device=args.device)
 
     # Get content & style full paths
     if os.path.isdir(args.content_path):
@@ -74,8 +78,13 @@ def main():
 
             # style_img = get_img_crop(style_fullpath, resize=args.style_size, crop=args.crop_size)
             # style_img = resize_to(get_img(style_fullpath), content_img.shape[0])
-            style_img = resize_to(get_img(style_fullpath), args.style_size)
-            
+
+            style_img = get_img(style_fullpath)
+            if args.style_size > 0:
+                style_img = resize_to(style_img, args.style_size)
+            if args.crop_size > 0:
+                style_img = center_crop(style_img, args.crop_size)
+
             if args.keep_colors:
                 style_img = preserve_colors_np(style_img, content_img)
 
@@ -98,7 +107,7 @@ def main():
                 stylized_rgb = np.hstack([style_img_resized, stylized_rgb])
 
             # Format for out filename: {out_path}/{content_prefix}_{style_prefix}.{content_ext}
-            out_f = os.path.join(args.out_path, 'np_{}_{}{}'.format(content_prefix, style_prefix, content_ext))
+            out_f = os.path.join(args.out_path, '{}_{}{}'.format(content_prefix, style_prefix, content_ext))
             # out_f = f'{content_prefix}_{style_prefix}.{content_ext}'
             
             save_img(out_f, stylized_rgb)

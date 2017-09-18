@@ -164,6 +164,8 @@ def main():
             if args.noise:  # Generate textures from noise instead of images
                 frame_resize = np.random.randint(0, 256, frame_resize.shape, np.uint8)
                 frame_resize = gaussian_filter(frame_resize, sigma=1)
+                # frame_resize = np.random.normal(0.5, 0.5, size=frame_resize.shape)
+                # frame_resize = np.uint8(frame_resize * 255)
 
             count += 1
             print("Frame:",count,"Orig shape:",frame.shape,"New shape",frame_resize.shape)
