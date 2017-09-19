@@ -3,7 +3,7 @@ from utils import save_img
 import tensorflow as tf
 
 
-def wct_tf(content, style, alpha, eps=1):
+def wct_tf(content, style, alpha, eps=1e-6):
     '''TF/GPU version of Whiten-Color Transform
        Assume that 1) content/style encodings are stacked in first two rows
        and 2) they have shape format HxWxC
@@ -26,7 +26,7 @@ def wct_tf(content, style, alpha, eps=1):
     mc = tf.reduce_mean(content_flat, axis=1, keep_dims=True)
     fc = content_flat - mc
 
-    fcfc = tf.matmul(fc, fc, transpose_b=True) / (tf.cast(H*W, tf.float32) - tf.constant(1.)) + tf.eye(C)*eps
+    fcfc = tf.matmul(fc, fc, transpose_b=True) / (tf.cast(H*W, tf.float32) - tf.constant(1.)) + tf.eye(C)*1.
     
     Sc, Uc, Vc = tf.svd(fcfc, full_matrices=True)
 
@@ -38,7 +38,7 @@ def wct_tf(content, style, alpha, eps=1):
     ms = tf.reduce_mean(style_flat, axis=1, keep_dims=True)
     fs = style_flat - ms
 
-    fsfs = tf.matmul(fs, tf.transpose(fs)) / (tf.cast(Hs*Ws, tf.float32) - tf.constant(1.)) + tf.eye(Cs)*eps
+    fsfs = tf.matmul(fs, tf.transpose(fs)) / (tf.cast(Hs*Ws, tf.float32) - tf.constant(1.)) + tf.eye(Cs)*1.
 
     Ss, Us, Vs = tf.svd(fsfs, full_matrices=True)
     
