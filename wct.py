@@ -1,108 +1,163 @@
+from __future__ import division, print_function
+
+import os
 import numpy as np
-from utils import save_img
+import time
+from model import WCTModel
 import tensorflow as tf
+from ops import wct_np
+from coral import coral_numpy
 
 
-def wct_tf(content, style, alpha, eps=1e-6):
-    '''TF/GPU version of Whiten-Color Transform
-       Assume that 1) content/style encodings are stacked in first two rows
-       and 2) they have shape format HxWxC
+class WCT(object):
+    '''Styilze images with trained WCT model'''
 
-       See p.4 of the Universal Style Transfer paper for equations:
-       https://arxiv.org/pdf/1705.08086.pdf
-    '''
-    # Remove batch dim and reorder to CxHxW
-    content_t = tf.transpose(tf.squeeze(content), (2, 0, 1))
-    style_t = tf.transpose(tf.squeeze(style), (2, 0, 1))
+    def __init__(self, checkpoints, relu_targets, vgg_path, device='/gpu:0'): 
+        '''
+            Args:
+                checkpoint_dir: Path to trained model checkpoint
+                device: String for device ID to load model onto
+        '''       
+        graph = tf.get_default_graph()
 
-    C, H, W = tf.unstack(tf.shape(content_t))
-    Cs, Hs, Ws = tf.unstack(tf.shape(style_t))
+        with graph.device(device):
+            self.model = WCTModel(mode='test', relu_targets=relu_targets, vgg_path=vgg_path)
+            
+            self.content_input = self.model.content_input
+            # self.encoded = self.model.
+            self.decoded_output = self.model.decoded_output
+            self.style_encoded = None
 
-    # CxHxW -> CxH*W
-    content_flat = tf.reshape(content_t, (C, H*W))
-    style_flat = tf.reshape(style_t, (C, Hs*Ws))
+            config = tf.ConfigProto(allow_soft_placement=True)
+            config.gpu_options.allow_growth = True
+            sess = tf.Session(config=config)
+            self.sess = sess
 
-    # Center content
-    mc = tf.reduce_mean(content_flat, axis=1, keep_dims=True)
-    fc = content_flat - mc
+            self.sess.run(tf.global_variables_initializer())
 
-    fcfc = tf.matmul(fc, fc, transpose_b=True) / (tf.cast(H*W, tf.float32) - 1.) + tf.eye(C)*1.
-    
-    Sc, Uc, Vc = tf.svd(fcfc, full_matrices=True)
+            # ckpts = ['/home/rachael/Downloads/tflogs/wct/multi_relu5_1_f1e-2/','/home/rachael/Downloads/tflogs/wct/multi_relu4_1_f1e-2/','/home/rachael/Downloads/tflogs/wct/multi_relu3_1_f1e-2/']
 
-    Dc_sq_inv = tf.diag(tf.pow(Sc + eps, -0.5))
+            for relu_target, checkpoint_dir in zip(relu_targets, checkpoints):
+                decoder_prefix = 'decoder_{}'.format(relu_target)
+                relu_vars = [v for v in tf.trainable_variables() if decoder_prefix in v.name]
 
-    fc_hat = tf.matmul(tf.matmul(tf.matmul(Uc, Dc_sq_inv), Uc, transpose_b=True), fc)
+                saver = tf.train.Saver(var_list=relu_vars)
+                
+                ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+                if ckpt and ckpt.model_checkpoint_path:
+                    print("Restoring vars for {} from checkpoint {}".format(relu_target, ckpt.model_checkpoint_path))
+                    saver.restore(self.sess, ckpt.model_checkpoint_path)
+                else:
+                    raise Exception("No checkpoint found...")
 
-    # Compute style coloring
-    ms = tf.reduce_mean(style_flat, axis=1, keep_dims=True)
-    fs = style_flat - ms
+    @staticmethod
+    def preprocess(image):
+        if len(image.shape) == 3:  # Add batch dimension
+            image = np.expand_dims(image, 0)
+        return image / 255.        # Range [0,1]
 
-    fsfs = tf.matmul(fs, tf.transpose(fs)) / (tf.cast(Hs*Ws, tf.float32) - 1.) + tf.eye(Cs)*1.
+    @staticmethod
+    def postprocess(image):
+        return np.uint8(np.clip(image, 0, 1) * 255)
 
-    Ss, Us, Vs = tf.svd(fsfs, full_matrices=True)
-    
-    Ds_sq = tf.diag(tf.pow(Ss + eps, 0.5))
+    def predict(self, content, style, alpha=1):
+        '''Stylize a single content/style pair
+           Assumes that images are RGB [0,255]
+        '''
+        content = self.preprocess(content)
+        style   = self.preprocess(style)
 
-    fcs_hat = tf.matmul(tf.matmul(tf.matmul(Us, Ds_sq), tf.transpose(Us)), fc_hat)
+        # if self.style_encoded is None:
+        #     self.style_encoded = self.sess.run(self.model.style_encoded, feed_dict={self.model.style_img: style,
+        #                                                                       self.model.compute_style: True})
+        #     print("Computed style encoded")
 
-    fcs_hat = fcs_hat + ms
+        # content_encoded = self.sess.run(self.encoded, feed_dict={self.content_input: content})
+        s = time.time()
+        stylized = self.sess.run(self.decoded_output, feed_dict={
+                                                          self.content_input: content,
+                                                          self.model.style_input: style,
+                                                          self.model.compute_content: True,
+                                                          self.model.compute_style: True,
+                                                          self.model.apply_wct: True,
+                                                          self.model.alpha: alpha})
+        print(time.time() - s)
+        # style_encoded   = self.sess.run(self.encoded, feed_dict={self.content_input: style})
 
-    blended = alpha * fcs_hat + (1 - alpha) * (fc + mc)
+        # encoded_wct = wct(content_encoded.squeeze(), style_encoded.squeeze(), alpha)
 
-    # CxH*W -> CxHxW
-    blended = tf.reshape(blended, (C,H,W))
-    # CxHxW -> NxHxWxC
-    blended = tf.expand_dims(tf.transpose(blended, (1,2,0)), 0)
+        # stylized = self.sess.run(self.decoded, feed_dict={self.encoded_pl: np.expand_dims(encoded_wct, 0)})
 
-    return blended
-     
+        return self.postprocess(stylized[0])
 
-def wct_np(content, style, alpha=0.6, eps=1e-5):
-    '''Perform Whiten-Color Transform on feature maps
-       See p.4 of the Universal Style Transfer paper for equations:
-       https://arxiv.org/pdf/1705.08086.pdf
-    '''    
-    # HxWxC -> CxHxW
-    content_t = np.transpose(content, (2, 0, 1))
-    style_t = np.transpose(style, (2, 0, 1))
+    # def predict_np(self, content, style, alpha=1):
+    #     '''Stylize a single content/style pair with numpy WCT
+    #        Assumes that images are RGB [0,255]
+    #     '''
+    #     content = self.preprocess(content)
+    #     style   = self.preprocess(style)
 
-    # CxHxW -> CxH*W
-    content_flat = content_t.reshape(-1, content_t.shape[1]*content_t.shape[2])
-    style_flat = style_t.reshape(-1, style_t.shape[1]*style_t.shape[2])
+    #     # if self.style_encoded is None:
+    #     style_encoded = self.sess.run(self.model.style_encoded, feed_dict={self.model.style_input: style,
+    #                                                                        self.model.compute_style: True,
+    #                                                                        self.model.compute_content: False})
 
-    # Center content
-    mc = content_flat.mean(axis=1, keepdims=True)
-    fc = content_flat - mc
+        
+    #     s = time.time()
+    #     # print("style")
+    #     # print(style_encoded)
+    #     content_encoded = self.sess.run(self.encoded, feed_dict={self.model.content_input: content,
+    #                                                              self.model.compute_content: True})
+    #     # print("content")
+    #     # print(content_encoded)
+    #     encoded_wct = wct_np(content_encoded.squeeze(), style_encoded.squeeze(), alpha)
+    #     # print("wct")
+    #     # print(encoded_wct)
 
-    fcfc = np.dot(fc, fc.T) / (content_t.shape[1]*content_t.shape[2] - 1)
-    
-    Ec, wc, _ = np.linalg.svd(fcfc)
+    #     stylized = self.sess.run(self.decoded, feed_dict={self.model.decoder_input: np.expand_dims(encoded_wct, 0)})
+    #     # stylized = self.sess.run(self.decoded, feed_dict={
+    #     #                                                   self.content_input: content,
+    #     #                                                   self.model.style_img: style,
+    #     #                                                   self.model.compute_content: True,
+    #     #                                                   self.model.compute_style: True,
+    #     #                                                   self.model.apply_wct: True,
+    #     #                                                   self.model.alpha: alpha})
+    #     print(time.time() - s)
+        
 
-    Dc_sq_inv = np.linalg.inv(np.sqrt(np.diag(wc+eps)))
+    #     return self.postprocess(stylized[0])
 
-    fc_hat = Ec.dot(Dc_sq_inv).dot(Ec.T).dot(fc)
 
-    # Compute style coloring
-    ms = style_flat.mean(axis=1, keepdims=True)
-    fs = style_flat - ms
+    # def predict_batch(self, content_batch, style, alpha=1):
+    #     '''Stylize a batch of content imgs with a single style
+    #        Assumes that images are RGB [0,255]
+    #     '''
+    #     content_batch = self.preprocess(content_batch)
+    #     style_batch = np.stack([style]*len(content_batch)) 
+    #     style_batch = self.preprocess(style_batch)
 
-    fsfs = np.dot(fs, fs.T) / (style_t.shape[1]*style_t.shape[2] - 1)
+    #     stylized = self.sess.run(self.stylized, feed_dict={self.content_input: content_batch,
+    #                                                        self.style_imgs:   style_batch,
+    #                                                        self.alpha_tensor: alpha})
 
-    Es, ws, _ = np.linalg.svd(fsfs)
-    
-    Ds_sq = np.sqrt(np.diag(ws+eps))
+    #     return self.postprocess(stylized)
 
-    fcs_hat = Es.dot(Ds_sq).dot(Es.T).dot(fc_hat)
+    # def predict_interpolate(self, content, styles, style_weights, alpha=1):
+    #     '''Stylize a weighted sum of multiple style encodings for a single content'''
+    #     content_stacked = np.stack([content]*len(styles))  # Repeat content for each style
+    #     style_stacked = np.stack(styles)
+    #     content_stacked = self.preprocess(content_stacked)
+    #     style_stacked = self.preprocess(style_stacked)
 
-    fcs_hat = fcs_hat + ms
+    #     encoded = self.sess.run(self.model.wct_encoded, feed_dict={self.content_input: content_stacked,
+    #                                                                  self.style_imgs:   style_stacked,
+    #                                                                  self.alpha_tensor: alpha})
 
-    blended = alpha*fcs_hat + (1 - alpha)*(fc)
+    #     # Weight & combine WCT transformed encodings
+    #     style_weights = np.array(style_weights).reshape((-1, 1, 1, 1))
+    #     encoded_weighted = encoded * style_weights
+    #     encoded_interpolated = np.sum(encoded_weighted, axis=0, keepdims=True)
 
-    # CxH*W -> CxHxW
-    blended = blended.reshape(content_t.shape)
+    #     stylized = self.sess.run(self.stylized, feed_dict={self.model.wct_encoded_pl: encoded_interpolated})
 
-    # CxHxW -> HxWxC
-    blended = np.transpose(blended, (1,2,0))  
-    
-    return blended
+    #     return self.postprocess(stylized[0])

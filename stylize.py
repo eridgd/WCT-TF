@@ -10,7 +10,7 @@ from utils import get_files, get_img, get_img_crop, save_img, resize_to, center_
 import scipy
 from scipy.ndimage.filters import gaussian_filter
 import time
-from inference import AdaINference
+from wct import WCT
 
 
 parser = argparse.ArgumentParser()
@@ -41,8 +41,8 @@ args = parser.parse_args()
 def main():
     start = time.time()
 
-    # Load the AdaIN model
-    wct_model = AdaINference(checkpoints=args.checkpoints, 
+    # Load the WCT model
+    wct_model = WCT(checkpoints=args.checkpoints, 
                              relu_targets=args.relu_targets,
                              vgg_path=args.vgg_path, 
                              device=args.device)

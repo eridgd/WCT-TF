@@ -5,7 +5,7 @@ import functools
 import time
 import tensorflow as tf, numpy as np, os, random
 from utils import get_files, get_img_random_crop
-from model import AdaINModel
+from model import WCTModel
 import threading
 
 
@@ -114,7 +114,7 @@ def train():
                                                 queue_input_val:     val_batch})
 
         ### Build the model graph and train/summary ops
-        model = AdaINModel(mode='train',
+        model = WCTModel(mode='train',
                            relu_targets=[args.relu_target],
                            vgg_path=args.vgg_path,
                            batch_size=args.batch_size,

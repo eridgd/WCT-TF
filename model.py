@@ -7,14 +7,14 @@ from keras import backend as K
 from keras.models import Model
 from keras.layers import Input, UpSampling2D, Lambda
 from ops import pad_reflect, Conv2DReflect, torch_decay
+from ops import wct_tf
 import functools
 from collections import namedtuple
-from wct import wct_tf
 
-### Helpers
+
+### Helpers ###
 mse = tf.losses.mean_squared_error
 clip = lambda x: tf.clip_by_value(x, 0, 1)
-
 EncoderDecoder = namedtuple('EncoderDecoder', 
                             'content_input content_encoder_model content_encoded \
                              style_encoded \
@@ -23,8 +23,9 @@ EncoderDecoder = namedtuple('EncoderDecoder',
                              train_op learning_rate global_step \
                              summary_op')
 
+### Model Graph ###
 
-class AdaINModel(object):
+class WCTModel(object):
     '''Adaptive Instance Normalization model from https://arxiv.org/abs/1703.06868'''
 
     def __init__(self, mode='train', relu_targets=['relu3_1'], vgg_path=None,  *args, **kwargs):
@@ -32,7 +33,7 @@ class AdaINModel(object):
 
         self.style_input = tf.placeholder_with_default(tf.constant([[[[0.,0.,0.]]]]), shape=(None, None, None, 3), name='style_img')
 
-        # Setup flags
+        # Setup flags for encoding content/style and applying WCT
         self.compute_content =  tf.placeholder_with_default(tf.constant(True), shape=[])
         self.compute_style   =  tf.placeholder_with_default(tf.constant(False), shape=[])
         self.apply_wct       =  tf.placeholder_with_default(tf.constant(False), shape=[])
@@ -41,7 +42,8 @@ class AdaINModel(object):
 
         self.encoder_decoders = []
         
-        #### Build the graph
+        ### Build the graph ###
+        
         # Load shared VGG model up to deepest target layer
         with tf.name_scope('vgg_encoder'):
             deepest_target = sorted(relu_targets)[-1]
@@ -49,7 +51,7 @@ class AdaINModel(object):
             self.vgg_model = vgg_from_t7(vgg_path, target_layer=deepest_target)
         print(self.vgg_model.summary())
 
-        #### Build the encoder/decoders
+        # Build enc/decs for each target relu and hook the out of each decoder up to subsequent encoder in
         for i, relu in enumerate(relu_targets):
             print('Building decoder for relu target',relu)
             
@@ -64,6 +66,7 @@ class AdaINModel(object):
         
             self.encoder_decoders.append(enc_dec)
 
+        # Hooks for placeholder input for first encoder and final output from last decoder
         self.content_input  = self.encoder_decoders[0].content_input
         self.decoded_output = self.encoder_decoders[-1].decoded
         
@@ -120,7 +123,7 @@ class AdaINModel(object):
         if self.mode == 'train':  # Train & summary ops only needed for training phase
             ### Losses
             with tf.name_scope('losses_'+relu_target):
-                # Content loss between stylized encoding and AdaIN encoding
+                # Content loss between stylized encoding and WCT encoding
                 feature_loss = feature_weight * mse(decoded_encoded, content_encoded)
 
                 pixel_loss = pixel_weight * mse(decoded, content_imgs)
@@ -160,11 +163,11 @@ class AdaINModel(object):
                     tf.summary.histogram(var.op.name, var)
 
                 summary_op = tf.summary.merge_all()
-        # For inference set unnneeded ops to None
-        else:                     
+        else:
+            # For inference set unnneeded ops to None
             pixel_loss, feature_loss, tv_loss, total_loss, train_op, global_step, summary_op = [None]*7
 
-        # Put it all together in a namedtuple
+        # Put it all together
         encoder_decoder = EncoderDecoder(content_input=content_imgs, 
                                          content_encoder_model=content_encoder_model,
                                          content_encoded=content_encoded,

@@ -9,7 +9,7 @@ from utils import preserve_colors_np
 from utils import get_files, get_img, get_img_crop, resize_to, center_crop
 from utils import WebcamVideoStream, FPS
 from scipy.ndimage.filters import gaussian_filter
-from inference import AdaINference
+from wct import WCT
 
 
 parser = argparse.ArgumentParser()
@@ -62,7 +62,7 @@ class StyleWindow(object):
             # Select style image by index
             cv2.createTrackbar('index','Style Controls', 0, len(self.style_imgs)-1, self.set_idx)
         
-        # Blend param for AdaIN transform
+        # Blend param for WCT transform
         cv2.createTrackbar('alpha','Style Controls', int(self.alpha*100), 100, self.set_alpha)
 
         # Resize style to this size before cropping
@@ -121,8 +121,8 @@ class StyleWindow(object):
 
 
 def main():
-    # Load the AdaIN model
-    ada_in = AdaINference(checkpoints=args.checkpoints, 
+    # Load the WCT model
+    ada_in = WCT(checkpoints=args.checkpoints, 
                           relu_targets=args.relu_targets,
                           vgg_path=args.vgg_path, 
                           device=args.device)
@@ -206,7 +206,7 @@ def main():
                 stylized_bgr = cv2.resize(stylized_bgr, out_shape) # Make sure frame matches video size
                 video_writer.write(stylized_bgr)
 
-            cv2.imshow('AdaIN Style', stylized_bgr)
+            cv2.imshow('WCT Style', stylized_bgr)
 
             fps.update()
 
