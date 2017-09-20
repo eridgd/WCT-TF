@@ -28,7 +28,7 @@ EncoderDecoder = namedtuple('EncoderDecoder',
 class WCTModel(object):
     '''Adaptive Instance Normalization model from https://arxiv.org/abs/1703.06868'''
 
-    def __init__(self, mode='train', relu_targets=['relu3_1'], vgg_path=None,  *args, **kwargs):
+    def __init__(self, mode='train', relu_targets=['relu5_1','relu4_1','relu3_1','relu2_1','relu1_1'], vgg_path=None,  *args, **kwargs):
         self.mode = mode
 
         self.style_input = tf.placeholder_with_default(tf.constant([[[[0.,0.,0.]]]]), shape=(None, None, None, 3), name='style_img')
@@ -49,20 +49,32 @@ class WCTModel(object):
             deepest_target = sorted(relu_targets)[-1]
             print('Loading VGG up to layer',deepest_target)
             self.vgg_model = vgg_from_t7(vgg_path, target_layer=deepest_target)
-        print(self.vgg_model.summary())
+            print(self.vgg_model.summary())
+
+        if self.mode == 'train':
+            style_encodings = [tf.constant([[[[0.,0.,0.]]]])]
+        else:
+            # Build model to extract intermediate relu layers for style img to be used in multi-level pipeline
+            with tf.name_scope('style_encoder'):
+                style_encoding_layers = [self.vgg_model.get_layer(relu).output for relu in relu_targets]
+                style_encoder_model = Model(inputs=self.vgg_model.input, outputs=style_encoding_layers)
+                style_encodings = style_encoder_model(self.style_input)
+
+            if len(relu_targets) == 1:
+                style_encodings = [style_encodings]
 
         # Build enc/decs for each target relu and hook the out of each decoder up to subsequent encoder in
-        for i, relu in enumerate(relu_targets):
+        for relu, style_encoded in zip(relu_targets, style_encodings):
             print('Building decoder for relu target',relu)
             
-            if i == 0: 
+            if relu == relu_targets[0]: 
                 # Input tensor will be a placeholder for the first decoder
                 input_tensor = None
             else:
                 # Input to intermediate levels is the (clipped) output from previous decoder
                 input_tensor = clip(self.encoder_decoders[-1].decoded)
 
-            enc_dec = self.build_model(relu, input_tensor=input_tensor, **kwargs)
+            enc_dec = self.build_model(relu, input_tensor=input_tensor, style_encoded_tensor=style_encoded, **kwargs)
         
             self.encoder_decoders.append(enc_dec)
 
@@ -73,6 +85,7 @@ class WCTModel(object):
     def build_model(self, 
                     relu_target,
                     input_tensor,
+                    style_encoded_tensor,
                     batch_size=8,
                     feature_weight=1e-2,
                     pixel_weight=1,
@@ -100,8 +113,8 @@ class WCTModel(object):
             # TODO: encode style once at beginning of process and use those output tensors as input to model building
             # TODO: only build this if in test mode
             ### Build style encoder if applying WCT
-            with tf.name_scope('style_encoder_'+relu_target):
-                style_encoded = tf.cond(self.compute_style, lambda: content_encoder_model(self.style_input), lambda: content_encoded)
+            
+            style_encoded = tf.cond(self.compute_style, lambda: style_encoded_tensor, lambda: content_encoded)
                 
             ### Apply WCT if inference. During training pass through content_encoded unchanged.
             with tf.name_scope('wct_'+relu_target):
@@ -126,6 +139,7 @@ class WCTModel(object):
                 # Content loss between stylized encoding and WCT encoding
                 feature_loss = feature_weight * mse(decoded_encoded, content_encoded)
 
+                # Pixel reconstruction loss between decoded/reconstructed img and original
                 pixel_loss = pixel_weight * mse(decoded, content_imgs)
 
                 # Total Variation loss
@@ -134,7 +148,6 @@ class WCTModel(object):
                 else:
                     tv_loss = tf.constant(0.)
 
-                # Add it all together
                 total_loss = feature_loss + pixel_loss + tv_loss
 
             ### Training ops
@@ -144,8 +157,8 @@ class WCTModel(object):
                 learning_rate = torch_decay(learning_rate, global_step, lr_decay)
                 d_optimizer = tf.train.AdamOptimizer(learning_rate, beta1=0.9, beta2=0.999)
 
-                t_vars = tf.trainable_variables()
-                d_vars = [var for var in t_vars if 'decoder' in var.name]  # Only train decoder vars, encoder is frozen
+                # Only train decoder vars, encoder is frozen
+                d_vars = [var for var in tf.trainable_variables() if 'decoder_'+relu_target in var.name]
 
                 train_op = d_optimizer.minimize(total_loss, var_list=d_vars, global_step=global_step)
 
