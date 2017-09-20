@@ -33,10 +33,8 @@ class WCTModel(object):
 
         self.style_input = tf.placeholder_with_default(tf.constant([[[[0.,0.,0.]]]]), shape=(None, None, None, 3), name='style_img')
 
-        # Setup flags for encoding content/style and applying WCT
-        self.compute_content =  tf.placeholder_with_default(tf.constant(True), shape=[])
-        self.compute_style   =  tf.placeholder_with_default(tf.constant(False), shape=[])
-        self.apply_wct       =  tf.placeholder_with_default(tf.constant(False), shape=[])
+        # Flag for applying WCT, should only be True for test mode. Setting to False will pass through content encoding.
+        self.apply_wct =  tf.placeholder_with_default(tf.constant(False), shape=[])
 
         self.alpha = tf.placeholder_with_default(1., shape=[], name='alpha')
 
@@ -52,7 +50,7 @@ class WCTModel(object):
             print(self.vgg_model.summary())
 
         if self.mode == 'train':
-            style_encodings = [tf.constant([[[[0.,0.,0.]]]])]
+            style_encodings = [None]  # Style encoding is not needed for train stage
         else:
             # Build model to extract intermediate relu layers for style img to be used in multi-level pipeline
             with tf.name_scope('style_encoder'):
@@ -73,7 +71,6 @@ class WCTModel(object):
             else:
                 # Input to intermediate levels is the (clipped) output from previous decoder
                 input_tensor = clip(self.encoder_decoders[-1].decoded)
-
             enc_dec = self.build_model(relu, input_tensor=input_tensor, style_encoded_tensor=style_encoded, **kwargs)
         
             self.encoder_decoders.append(enc_dec)
@@ -85,7 +82,7 @@ class WCTModel(object):
     def build_model(self, 
                     relu_target,
                     input_tensor,
-                    style_encoded_tensor,
+                    style_encoded_tensor=None,
                     batch_size=8,
                     feature_weight=1e-2,
                     pixel_weight=1,
@@ -97,7 +94,6 @@ class WCTModel(object):
             ### Build encoder for reluX_1
             with tf.name_scope('content_encoder_'+relu_target):
                 if input_tensor is None:  # This is the first level encoder that takes original content imgs
-
                     content_imgs = tf.placeholder_with_default(tf.constant([[[[0.,0.,0.]]]]), shape=(None, None, None, 3), name='content_imgs')
                 else:                     # This is an intermediate-level encoder that takes output tensor from previous level as input
                     content_imgs = input_tensor  
@@ -107,26 +103,24 @@ class WCTModel(object):
                 content_encoder_model = Model(inputs=self.vgg_model.input, outputs=content_layer)
 
                 # Setup content layer encodings for content images
-                zeros = np.zeros((1,1,1,content_layer.get_shape()[-1]), dtype=np.float32)
-                content_encoded = tf.cond(self.compute_content, lambda: content_encoder_model(content_imgs), lambda: tf.constant(zeros))
-
-            # TODO: encode style once at beginning of process and use those output tensors as input to model building
-            # TODO: only build this if in test mode
-            ### Build style encoder if applying WCT
-            
-            style_encoded = tf.cond(self.compute_style, lambda: style_encoded_tensor, lambda: content_encoded)
-                
-            ### Apply WCT if inference. During training pass through content_encoded unchanged.
-            with tf.name_scope('wct_'+relu_target):
-                decoder_input = tf.cond(self.apply_wct, lambda: wct_tf(content_encoded, style_encoded, self.alpha), lambda: content_encoded)
+                content_encoded = content_encoder_model(content_imgs)
+ 
+            ### Build style encoder & WCT if test mode
+            if self.mode != 'train':                
+                # Apply WCT if flag is set to true. Otherwise, pass content_encoded along
+                with tf.name_scope('wct_'+relu_target):
+                    decoder_input = tf.cond(self.apply_wct, lambda: wct_tf(content_encoded, style_encoded_tensor, self.alpha), lambda: content_encoded)
+            else:
+                decoder_input = content_encoded
 
             ### Build decoder
             with tf.name_scope('decoder_'+relu_target):
                 n_channels = content_encoded.get_shape()[-1].value
                 decoder_model = self.build_decoder(input_shape=(None, None, n_channels), relu_target=relu_target)
 
+                # Wrap the decoder_input tensor so that it has the proper shape for decoder_model
                 decoder_input_wrapped = tf.placeholder_with_default(decoder_input, shape=[None,None,None,n_channels])
-                
+
                 # Reconstruct/decode from encoding
                 decoded = decoder_model(Lambda(lambda x: x)(decoder_input_wrapped)) # Lambda converts TF tensor to Keras
 
@@ -184,7 +178,7 @@ class WCTModel(object):
         encoder_decoder = EncoderDecoder(content_input=content_imgs, 
                                          content_encoder_model=content_encoder_model,
                                          content_encoded=content_encoded,
-                                         style_encoded=style_encoded,
+                                         style_encoded=style_encoded_tensor,
                                          decoder_input=decoder_input,
                                          decoder_model=decoder_model,
                                          decoded=decoded,

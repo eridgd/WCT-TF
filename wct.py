@@ -24,7 +24,6 @@ class WCT(object):
             self.model = WCTModel(mode='test', relu_targets=relu_targets, vgg_path=vgg_path)
             
             self.content_input = self.model.content_input
-            # self.encoded = self.model.
             self.decoded_output = self.model.decoded_output
             self.style_encoded = None
 
@@ -34,8 +33,6 @@ class WCT(object):
             self.sess = sess
 
             self.sess.run(tf.global_variables_initializer())
-
-            # ckpts = ['/home/rachael/Downloads/tflogs/wct/multi_relu5_1_f1e-2/','/home/rachael/Downloads/tflogs/wct/multi_relu4_1_f1e-2/','/home/rachael/Downloads/tflogs/wct/multi_relu3_1_f1e-2/']
 
             for relu_target, checkpoint_dir in zip(relu_targets, checkpoints):
                 decoder_prefix = 'decoder_{}'.format(relu_target)
@@ -67,26 +64,13 @@ class WCT(object):
         content = self.preprocess(content)
         style   = self.preprocess(style)
 
-        # if self.style_encoded is None:
-        #     self.style_encoded = self.sess.run(self.model.style_encoded, feed_dict={self.model.style_img: style,
-        #                                                                       self.model.compute_style: True})
-        #     print("Computed style encoded")
-
-        # content_encoded = self.sess.run(self.encoded, feed_dict={self.content_input: content})
         s = time.time()
         stylized = self.sess.run(self.decoded_output, feed_dict={
                                                           self.content_input: content,
                                                           self.model.style_input: style,
-                                                          self.model.compute_content: True,
-                                                          self.model.compute_style: True,
                                                           self.model.apply_wct: True,
                                                           self.model.alpha: alpha})
         print(time.time() - s)
-        # style_encoded   = self.sess.run(self.encoded, feed_dict={self.content_input: style})
-
-        # encoded_wct = wct(content_encoded.squeeze(), style_encoded.squeeze(), alpha)
-
-        # stylized = self.sess.run(self.decoded, feed_dict={self.encoded_pl: np.expand_dims(encoded_wct, 0)})
 
         return self.postprocess(stylized[0])
 

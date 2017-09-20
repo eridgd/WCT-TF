@@ -157,9 +157,9 @@ def main():
     count = 0
 
     while(True):
-        if count > args.max_frames:
+        if args.max_frames > 0 and count > args.max_frames:
             break
-            
+
         ret, frame = cap.read()
 
         if ret is True:       
