@@ -9,13 +9,14 @@ from utils import preserve_colors_np
 from utils import get_files, get_img, get_img_crop, resize_to, center_crop
 from utils import WebcamVideoStream, FPS
 from scipy.ndimage.filters import gaussian_filter
-from inference import AdaINference
+from wct import WCT
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-src', '--source', dest='video_source', type=int,
                     default=0, help='Device index of the camera.')
-parser.add_argument('--checkpoint', type=str, help='Checkpoint directory', required=True)
+parser.add_argument('--checkpoints', nargs='+', type=str, help='List of checkpoint directories', required=True)
+parser.add_argument('--relu-targets', nargs='+', type=str, help='List of reluX_1 layers, corresponding to --checkpoints', required=True)
 parser.add_argument('--style-path', type=str, dest='style_path', help='Style images folder', required=True)
 parser.add_argument('--vgg-path', type=str,
                     dest='vgg_path', help='Path to vgg_normalised.t7', 
@@ -36,6 +37,7 @@ parser.add_argument('--concat', action='store_true', help="Concatenate style ima
 parser.add_argument('--interpolate', action='store_true', help="Interpolate between two images", default=False)
 parser.add_argument('--noise', action='store_true', help="Synthesize textures from noise images", default=False)
 parser.add_argument('-r', '--random', type=int, help='Load a random img every # iterations', default=0)
+parser.add_argument('--max-frames', type=int, help='Maximum # of frames', default=0)
 args = parser.parse_args()
 
 
@@ -43,7 +45,10 @@ class StyleWindow(object):
     '''Helper class to handle style image settings'''
 
     def __init__(self, style_path, img_size=512, crop_size=512, scale=1, alpha=1, interpolate=False):
-        self.style_imgs = get_files(style_path)
+        if os.path.isdir(style_path):
+            self.style_imgs = get_files(style_path)
+        else:
+            self.style_imgs = [style_path]  # Single image instead of folder
 
         # Create room for two styles for interpolation
         self.style_rgbs = [None, None]
@@ -58,7 +63,7 @@ class StyleWindow(object):
             # Select style image by index
             cv2.createTrackbar('index','Style Controls', 0, len(self.style_imgs)-1, self.set_idx)
         
-        # Blend param for AdaIN transform
+        # Blend param for WCT transform
         cv2.createTrackbar('alpha','Style Controls', int(self.alpha*100), 100, self.set_alpha)
 
         # Resize style to this size before cropping
@@ -117,8 +122,11 @@ class StyleWindow(object):
 
 
 def main():
-    # Load the AdaIN model
-    ada_in = AdaINference(args.checkpoint, args.vgg_path, device=args.device)
+    # Load the WCT model
+    ada_in = WCT(checkpoints=args.checkpoints, 
+                          relu_targets=args.relu_targets,
+                          vgg_path=args.vgg_path, 
+                          device=args.device)
 
     # Load a panel to control style settings
     style_window = StyleWindow(args.style_path, args.style_size, args.crop_size, args.scale, args.alpha, args.interpolate)
@@ -149,6 +157,9 @@ def main():
     count = 0
 
     while(True):
+        if args.max_frames > 0 and count > args.max_frames:
+            break
+
         ret, frame = cap.read()
 
         if ret is True:       
@@ -156,7 +167,6 @@ def main():
 
             if args.noise:  # Generate textures from noise instead of images
                 frame_resize = np.random.randint(0, 256, frame_resize.shape, np.uint8)
-                frame_resize = gaussian_filter(frame_resize, sigma=0.5)
 
             count += 1
             print("Frame:",count,"Orig shape:",frame.shape,"New shape",frame_resize.shape)
@@ -172,7 +182,7 @@ def main():
                 style_rgb = style_window.style_rgbs[0]
 
             # For best results style img should be comparable size to content
-            style_rgb = resize_to(style_rgb, min(content_rgb.shape[0], content_rgb.shape[1]))
+            # style_rgb = resize_to(style_rgb, min(content_rgb.shape[0], content_rgb.shape[1]))
 
             if args.interpolate is False:
                 # Run the frame through the style network
@@ -197,7 +207,7 @@ def main():
                 stylized_bgr = cv2.resize(stylized_bgr, out_shape) # Make sure frame matches video size
                 video_writer.write(stylized_bgr)
 
-            cv2.imshow('AdaIN Style', stylized_bgr)
+            cv2.imshow('WCT Style', stylized_bgr)
 
             fps.update()
 
