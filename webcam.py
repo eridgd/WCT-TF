@@ -37,6 +37,7 @@ parser.add_argument('--concat', action='store_true', help="Concatenate style ima
 parser.add_argument('--interpolate', action='store_true', help="Interpolate between two images", default=False)
 parser.add_argument('--noise', action='store_true', help="Synthesize textures from noise images", default=False)
 parser.add_argument('-r', '--random', type=int, help='Load a random img every # iterations', default=0)
+parser.add_argument('--max-frames', type=int, help='Maximum # of frames', default=0)
 args = parser.parse_args()
 
 
@@ -156,6 +157,9 @@ def main():
     count = 0
 
     while(True):
+        if count > args.max_frames:
+            break
+            
         ret, frame = cap.read()
 
         if ret is True:       
@@ -163,9 +167,6 @@ def main():
 
             if args.noise:  # Generate textures from noise instead of images
                 frame_resize = np.random.randint(0, 256, frame_resize.shape, np.uint8)
-                frame_resize = gaussian_filter(frame_resize, sigma=1)
-                # frame_resize = np.random.normal(0.5, 0.5, size=frame_resize.shape)
-                # frame_resize = np.uint8(frame_resize * 255)
 
             count += 1
             print("Frame:",count,"Orig shape:",frame.shape,"New shape",frame_resize.shape)
