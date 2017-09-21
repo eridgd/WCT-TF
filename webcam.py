@@ -28,6 +28,7 @@ parser.add_argument('--video-out', type=str, help="Save to output video file if 
 parser.add_argument('--fps', type=int, help="Frames Per Second for output video file", default=10)
 parser.add_argument('--scale', type=float, help="Scale the output image", default=1)
 parser.add_argument('--keep-colors', action='store_true', help="Preserve the colors of the style image", default=False)
+parser.add_argument('--passes', type=int, help="# of stylization passes per content image", default=1)
 parser.add_argument('--device', type=str,
                         dest='device', help='Device to perform compute on',
                         default='/gpu:0')
@@ -92,6 +93,7 @@ class StyleWindow(object):
             self.idx = np.random.randint(len(self.style_imgs))
 
         style_file = self.style_imgs[self.idx]
+        print('Loading style image',style_file)
         if self.crop_size > 0:
             self.style_rgbs[style_idx] = get_img_crop(style_file, resize=self.img_size, crop=self.crop_size)
         else:
@@ -124,7 +126,7 @@ class StyleWindow(object):
 
 def main():
     # Load the WCT model
-    ada_in = WCT(checkpoints=args.checkpoints, 
+    wct_model = WCT(checkpoints=args.checkpoints, 
                           relu_targets=args.relu_targets,
                           vgg_path=args.vgg_path, 
                           device=args.device)
@@ -187,14 +189,18 @@ def main():
 
             if args.interpolate is False:
                 # Run the frame through the style network
-                stylized_rgb = ada_in.predict(content_rgb, style_rgb, style_window.alpha)
-                # stylized_rgb = ada_in.predict_np(content_rgb, style_rgb, style_window.alpha) # Numpy version
-            else:
-                interp_weights = [style_window.interp_weight, 1 - style_window.interp_weight]
-                stylized_rgb = ada_in.predict_interpolate(content_rgb, 
-                                                          style_window.style_rgbs,
-                                                          interp_weights,
-                                                          style_window.alpha)
+                stylized_rgb = wct_model.predict(content_rgb, style_rgb, style_window.alpha)
+
+                if args.passes > 1:
+                    for i in range(args.passes-1):
+                        stylized_rgb = wct_model.predict(stylized_rgb, style_rgb, style_window.alpha)
+                # stylized_rgb = wct_model.predict_np(content_rgb, style_rgb, style_window.alpha) # Numpy version
+            # else: ## TODO Implement interpolation
+            #     interp_weights = [style_window.interp_weight, 1 - style_window.interp_weight]
+            #     stylized_rgb = wct_model.predict_interpolate(content_rgb, 
+            #                                               style_window.style_rgbs,
+            #                                               interp_weights,
+            #                                               style_window.alpha)
 
             # Stitch the style + stylized output together, but only if there's one style image
             if args.concat and args.interpolate is False:
@@ -208,7 +214,7 @@ def main():
                 stylized_bgr = cv2.resize(stylized_bgr, out_shape) # Make sure frame matches video size
                 video_writer.write(stylized_bgr)
 
-            cv2.imshow('WCT Style', stylized_bgr)
+            cv2.imshow('WCT Universal Style Transfer', stylized_bgr)
 
             fps.update()
 
