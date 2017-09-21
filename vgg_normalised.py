@@ -1,6 +1,6 @@
 import keras.backend as K
 from keras.models import Model
-from keras.layers import Flatten, Input, Conv2D, UpSampling2D, Activation, Lambda, AveragePooling2D, MaxPooling2D
+from keras.layers import Flatten, Input, Conv2D, UpSampling2D, Activation, Lambda, MaxPooling2D
 from keras.engine.topology import get_source_inputs
 from keras.utils import layer_utils
 from keras.utils.data_utils import get_file
@@ -17,6 +17,7 @@ def vgg_from_t7(t7_file, target_layer=None):
     '''Extract VGG layers from a Torch .t7 model into a Keras model
        e.g. vgg = vgg_from_t7('vgg_normalised.t7', target_layer='relu4_1')
        Adapted from https://github.com/jonrei/tf-AdaIN/blob/master/AdaIN.py
+       Converted caffe->t7 from https://github.com/xunhuang1995/AdaIN-style
     '''
     t7 = torchfile.load(t7_file, force_8bytes_long=False)
     
@@ -47,7 +48,6 @@ def vgg_from_t7(t7_file, target_layer=None):
         #     x = Upsampling2D(name=name)(x)
         elif module._typename == b'nn.SpatialMaxPooling':
             x = MaxPooling2D(name=name, padding='same')(x)
-            # x = AveragePooling2D(name=name, padding='same')(x)
         else:
             raise NotImplementedError(module._typename)
 
