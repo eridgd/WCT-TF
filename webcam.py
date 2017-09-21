@@ -3,10 +3,11 @@ from __future__ import print_function, division
 import os
 import argparse
 import cv2
+import time
 import numpy as np
 import tensorflow as tf
 from utils import preserve_colors_np
-from utils import get_files, get_img, get_img_crop, resize_to, center_crop
+from utils import get_files, get_img, get_img_crop, resize_to, center_crop, save_img
 from utils import WebcamVideoStream, FPS
 from scipy.ndimage.filters import gaussian_filter
 from wct import WCT
@@ -219,6 +220,12 @@ def main():
             elif key & 0xFF == ord('c'):
                 keep_colors = not keep_colors
                 print("Switching to keep_colors",keep_colors)
+            elif key & 0xFF == ord('c'):
+                keep_colors = not keep_colors
+                print("Switching to keep_colors",keep_colors)
+            elif key & 0xFF == ord('s'):
+                out_f = "{}.png".format(time.time())
+                save_img(out_f, stylized_rgb)
             elif key & 0xFF == ord('q'): # Quit
                 break
         else:
