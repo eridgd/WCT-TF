@@ -3,6 +3,7 @@ from __future__ import division, print_function
 import numpy as np
 # import torch
 
+### NumPy implementation
 
 def matSqrt_numpy(x):
     U,D,V = np.linalg.svd(x)
@@ -37,6 +38,8 @@ def coral_numpy(source, target):
 
     return coraled
 
+
+## PyTorch implementation
 
 # def matSqrt_pytorch(x):
 #     U,D,V = torch.svd(x)

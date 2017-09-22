@@ -20,7 +20,7 @@ def Conv2DReflect(lambda_name, *args, **kwargs):
 ### Whiten-Color Transform ops ###
 
 def wct_tf(content, style, alpha, eps=1e-6):
-    '''TF (CPU) version of Whiten-Color Transform
+    '''TensorFlow version of Whiten-Color Transform
        Assume that: 1) content/style encodings are stacked in first two rows
        and 2) they have shape format HxWxC
 
@@ -38,7 +38,6 @@ def wct_tf(content, style, alpha, eps=1e-6):
     content_flat = tf.reshape(content_t, (C, H*W))
     style_flat = tf.reshape(style_t, (C, Hs*Ws))
 
-    # Center content
     mc = tf.reduce_mean(content_flat, axis=1, keep_dims=True)
     fc = content_flat - mc
 
@@ -50,7 +49,6 @@ def wct_tf(content, style, alpha, eps=1e-6):
 
     fc_hat = tf.matmul(tf.matmul(tf.matmul(Uc, Dc_sq_inv), Uc, transpose_b=True), fc)
 
-    # Compute style coloring
     ms = tf.reduce_mean(style_flat, axis=1, keep_dims=True)
     fs = style_flat - ms
 
@@ -72,10 +70,9 @@ def wct_tf(content, style, alpha, eps=1e-6):
     blended = tf.expand_dims(tf.transpose(blended, (1,2,0)), 0)
 
     return blended
-     
 
 def wct_np(content, style, alpha=0.6, eps=1e-5):
-    '''Perform Whiten-Color Transform on feature maps
+    '''Perform Whiten-Color Transform on feature maps using numpy
        See p.4 of the Universal Style Transfer paper for equations:
        https://arxiv.org/pdf/1705.08086.pdf
     '''    
@@ -87,7 +84,6 @@ def wct_np(content, style, alpha=0.6, eps=1e-5):
     content_flat = content_t.reshape(-1, content_t.shape[1]*content_t.shape[2])
     style_flat = style_t.reshape(-1, style_t.shape[1]*style_t.shape[2])
 
-    # Center content
     mc = content_flat.mean(axis=1, keepdims=True)
     fc = content_flat - mc
 
@@ -99,7 +95,6 @@ def wct_np(content, style, alpha=0.6, eps=1e-5):
 
     fc_hat = Ec.dot(Dc_sq_inv).dot(Ec.T).dot(fc)
 
-    # Compute style coloring
     ms = style_flat.mean(axis=1, keepdims=True)
     fs = style_flat - ms
 
@@ -138,14 +133,3 @@ def torch_decay(learning_rate, global_step, decay_rate, name=None):
 
         # local clr = lr / (1 + state.t*lrd)
         return learning_rate / (1 + global_step*decay_rate)
-
-# def gram_matrix(feature_maps):
-#     """Computes the Gram matrix for a set of feature maps.
-#        Borrowed from https://github.com/tensorflow/magenta/blob/9eb2e71074c09f55dba10cc493d26aef3168cdcb/magenta/models/image_stylization/learning.py
-#     """
-#     batch_size, height, width, channels = tf.unstack(tf.shape(feature_maps))
-#     denominator = tf.to_float(height * width)
-#     feature_maps = tf.reshape(
-#       feature_maps, tf.stack([batch_size, height * width, channels]))
-#     matrix = tf.matmul(feature_maps, feature_maps, adjoint_a=True)
-#     return matrix / denominator
