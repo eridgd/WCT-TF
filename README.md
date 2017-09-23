@@ -30,16 +30,13 @@ Optionally:
 
 3. Obtain style images, e.g. from the [Wikiart dataset](https://www.kaggle.com/c/painter-by-numbers)
 
-4. Run stylization for live video with `webcam.py` or for images with `stylize.py`. Both scripts share the same required arguments. For instance, to run a multi-level stylization pipeline that goes from relu5_1->relu4_1->relu3_1->relu2_1->relu1_1:
+4. Run stylization for live video with `webcam.py` or for images with `stylize.py`. Both scripts share the same required arguments. For instance, to run a multi-level stylization pipeline that goes from relu5_1 -> relu4_1 -> relu3_1 -> relu2_1 -> relu1_1:
 
-`python webcam.py --checkpoints models/relu5_1 models/relu4_1 models/relu3_1 models/relu2_1 models/relu1_1 \
---relu-targets relu5_1 relu4_1 relu3_1 relu2_1 relu1_1 \
---style-size 512 --alpha 0.8 \
---style-path /path/to/styleimgs`
+ `python webcam.py --checkpoints models/relu5_1 models/relu4_1 models/relu3_1 models/relu2_1 models/relu1_1 --relu-targets relu5_1 relu4_1 relu3_1 relu2_1 relu1_1 --style-size 512 --alpha 0.8 --style-path /path/to/styleimgs` 
 
 The args `--checkpoints` and `--relu-targets` specify space-delimited lists of decoder checkpoint folders and corresponding relu layer targets. The order of relu targets determines the stylization pipeline order, where the output of one encoder/decoder becomes the input for the next. Specifying one checkpoint/relu target will perform single-level stylization.
 
-Other args to take note of are:
+Other args to take note of:
 
 * `--style-path`  Folder of style images or a single style image 
 * `--style-size`  Resize small side of style image to this
@@ -83,7 +80,7 @@ Additionally, `stylize.py` will stylize image files. The options are the same as
 
 ## Notes
 
-* The stylization pipeline can be hooked up with decoders in any order. For instance, to reproduce the (sub-optimal) reversed fine-to-coarse pipeline in figure 5(d) from the original paper, use the option `--relu-targets relu1_1 relu2_1 relu3_1 relu4_1 relu5_1` in webcam.py/stylize.py. 
+* The stylization pipeline can be hooked up with decoders in any order. For instance, to reproduce the (sub-optimal) reversed fine-to-coarse pipeline in figure 5(d) from the original paper use the option `--relu-targets relu1_1 relu2_1 relu3_1 relu4_1 relu5_1` in webcam.py/stylize.py. 
 * `coral.py` implements [CORellation ALignment](https://arxiv.org/abs/1612.01939) to transfer colors from the content image to the style image in order to preserve colors in the stylized output. The default method uses numpy, and I have also translated the author's CORAL code from Torch to PyTorch.
 
 
