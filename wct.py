@@ -15,17 +15,20 @@ class WCT(object):
     def __init__(self, checkpoints, relu_targets, vgg_path, device='/gpu:0'): 
         '''
             Args:
-                checkpoint_dir: Path to trained model checkpoint
+                checkpoints: List of trained decoder model checkpoint dirs
+                relu_targets: List of relu target layers corresponding to decoder checkpoints
+                vgg_path: Normalised VGG19 .t7 path
                 device: String for device ID to load model onto
         '''       
         graph = tf.get_default_graph()
 
         with graph.device(device):
+            # Build the graph
             self.model = WCTModel(mode='test', relu_targets=relu_targets, vgg_path=vgg_path)
             
             self.content_input = self.model.content_input
             self.decoded_output = self.model.decoded_output
-            self.style_encoded = None
+            # self.style_encoded = None
 
             config = tf.ConfigProto(allow_soft_placement=True)
             config.gpu_options.allow_growth = True
@@ -34,6 +37,7 @@ class WCT(object):
 
             self.sess.run(tf.global_variables_initializer())
 
+            # Load decoder vars one-by-one into the graph
             for relu_target, checkpoint_dir in zip(relu_targets, checkpoints):
                 decoder_prefix = 'decoder_{}'.format(relu_target)
                 relu_vars = [v for v in tf.trainable_variables() if decoder_prefix in v.name]
@@ -42,10 +46,10 @@ class WCT(object):
                 
                 ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
                 if ckpt and ckpt.model_checkpoint_path:
-                    print("Restoring vars for {} from checkpoint {}".format(relu_target, ckpt.model_checkpoint_path))
+                    print('Restoring vars for {} from checkpoint {}'.format(relu_target, ckpt.model_checkpoint_path))
                     saver.restore(self.sess, ckpt.model_checkpoint_path)
                 else:
-                    raise Exception("No checkpoint found...")
+                    raise Exception('No checkpoint found for target {} in dir {}'.format(relu_target, checkpoint_dir))
 
     @staticmethod
     def preprocess(image):
@@ -110,21 +114,6 @@ class WCT(object):
         
 
     #     return self.postprocess(stylized[0])
-
-
-    # def predict_batch(self, content_batch, style, alpha=1):
-    #     '''Stylize a batch of content imgs with a single style
-    #        Assumes that images are RGB [0,255]
-    #     '''
-    #     content_batch = self.preprocess(content_batch)
-    #     style_batch = np.stack([style]*len(content_batch)) 
-    #     style_batch = self.preprocess(style_batch)
-
-    #     stylized = self.sess.run(self.stylized, feed_dict={self.content_input: content_batch,
-    #                                                        self.style_imgs:   style_batch,
-    #                                                        self.alpha_tensor: alpha})
-
-    #     return self.postprocess(stylized)
 
     # def predict_interpolate(self, content, styles, style_weights, alpha=1):
     #     '''Stylize a weighted sum of multiple style encodings for a single content'''

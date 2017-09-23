@@ -26,9 +26,15 @@ EncoderDecoder = namedtuple('EncoderDecoder',
 ### Model Graph ###
 
 class WCTModel(object):
-    '''Adaptive Instance Normalization model from https://arxiv.org/abs/1703.06868'''
+    '''Model graph for Universal Style Transfer via Feature Transforms from https://arxiv.org/abs/1703.06868'''
 
     def __init__(self, mode='train', relu_targets=['relu5_1','relu4_1','relu3_1','relu2_1','relu1_1'], vgg_path=None,  *args, **kwargs):
+        '''
+            Args:
+                mode: 'train' or 'test'. If 'train' then training & summary ops will be added to the graph
+                relu_targets: List of relu target layers corresponding to decoder checkpoints
+                vgg_path: Normalised VGG19 .t7 path
+        '''
         self.mode = mode
 
         self.style_input = tf.placeholder_with_default(tf.constant([[[[0.,0.,0.]]]]), shape=(None, None, None, 3), name='style_img')
@@ -61,15 +67,15 @@ class WCTModel(object):
             if len(relu_targets) == 1:
                 style_encodings = [style_encodings]
 
-        # Build enc/decs for each target relu and hook the out of each decoder up to subsequent encoder in
+        # Build enc/decs for each target relu and hook the out of each decoder up to subsequent encoder input
         for relu, style_encoded in zip(relu_targets, style_encodings):
-            print('Building decoder for relu target',relu)
+            print('Building encoder/decoder for relu target',relu)
             
             if relu == relu_targets[0]: 
-                # Input tensor will be a placeholder for the first decoder
+                # Input tensor will be a placeholder for the first encoder/decoder
                 input_tensor = None
             else:
-                # Input to intermediate levels is the (clipped) output from previous decoder
+                # Input to intermediate levels is the output from previous decoder
                 input_tensor = clip(self.encoder_decoders[-1].decoded)
             enc_dec = self.build_model(relu, input_tensor=input_tensor, style_encoded_tensor=style_encoded, **kwargs)
         
@@ -84,11 +90,24 @@ class WCTModel(object):
                     input_tensor,
                     style_encoded_tensor=None,
                     batch_size=8,
-                    feature_weight=1e-2,
+                    feature_weight=1,
                     pixel_weight=1,
                     tv_weight=0,
                     learning_rate=1e-4,
                     lr_decay=5e-5):
+        '''Build the encoderdecoder architecture for a given relu layer.
+
+            Args:
+                relu_target: Layer of VGG to decode from
+                input_tensor: If None then a placeholder will be created, else use this tensor as the input to the encoder
+                style_encoded_tensor: Tensor for style image features at the same relu layer. Used only at test time.
+                batch_size: Batch size for training
+                feature_weight: Float weight for feature reconstruction loss
+                pixel_weight: Float weight for pixel reconstruction loss
+                tv_weight: Float weight for total variation loss
+                learning_rate: Float LR
+                lr_decay: Float linear decay for training
+        '''
         with tf.name_scope('encoder_decoder_'+relu_target):
 
             ### Build encoder for reluX_1
@@ -195,8 +214,15 @@ class WCTModel(object):
         return encoder_decoder
 
     def build_decoder(self, input_shape, relu_target): 
+        '''Build the decoder architecture that reconstructs from a given VGG relu layer.
+
+            Args:
+                input_shape: Tuple of input tensor shape, needed for channel dimension
+                relu_target: Layer of VGG to decode from
+        '''
         decoder_num = dict(zip(['relu1_1', 'relu2_1', 'relu3_1', 'relu4_1', 'relu5_1'], range(1,6)))[relu_target]
 
+        # Dict specifying the layers for each decoder level. relu5_1 is the deepest layer and will contain all layers
         decoder_archs = {
             5: [ #    layer    filts kern    HxW  / InC->OutC                                     
                 (Conv2DReflect, 512, 3),  # 16x16 / 512->512
@@ -238,7 +264,7 @@ class WCTModel(object):
                     x = layer_tup[0](name=layer_name)(x)
                 count += 1
 
-        layer_name = '{}_{}'.format(relu_target, count)
+        layer_name = '{}_{}'.format(relu_target, count) # Unique layer names are needed to ensure var naming consistency with multiple decoders in graph
         output = Conv2DReflect(layer_name, 3, 3, padding='valid', activation=None, name=layer_name)(x)  # 256x256 / 64->3
         
         decoder_model = Model(code, output, name='decoder_model_'+relu_target)
