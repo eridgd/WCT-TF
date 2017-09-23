@@ -4,7 +4,7 @@ This is a TensorFlow/Keras implementation of [Universal Style Transfer via Featu
 
 As in the original paper, reconstruction decoders for layers `reluX_1 (X=1,2,3,4,5)` are trained separately and then hooked up in a multi-level stylization pipeline in a single graph. A single VGG encoder is shared by all decoders to reduce memory usage.
 
-This repo is based on [my implementation](https://github.com/eridgd/AdaIN-TF/) of [Arbitrary Style Transfer in Real-time with Adaptive Instance Normalization](https://arxiv.org/abs/1703.06868).
+This repo is based on [my implementation](https://github.com/eridgd/AdaIN-TF/) of [Arbitrary Style Transfer in Real-time with Adaptive Instance Normalization](https://arxiv.org/abs/1703.06868) by Huang et al.
 
 
 ## Requirements
