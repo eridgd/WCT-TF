@@ -18,9 +18,9 @@ parser.add_argument('--log-path', type=str,
                     dest='log_path', help='Logging dir path')
 parser.add_argument('--relu-target', type=str, required=True,
                     help='Target VGG19 relu layer to decode from, e.g. relu4_1')
-parser.add_argument('--content-path', type=str,
+parser.add_argument('--content-path', type=str, required=True,
                     dest='content_path', help='Content images folder')
-parser.add_argument('--val-path', type=str,
+parser.add_argument('--val-path', type=str, default=None,
                     dest='val_path', help='Validation images folder')
 parser.add_argument('--vgg-path', type=str,
                     dest='vgg_path', help='Path to vgg_normalised.t7', 
@@ -28,24 +28,22 @@ parser.add_argument('--vgg-path', type=str,
 
 ### Loss weights
 parser.add_argument('--feature-weight', type=float,
-                    dest='feature_weight',
+                    dest='feature_weight', help='Feature loss weight',
                     default=1)
 parser.add_argument('--pixel-weight', type=float,
-                    dest='pixel_weight',
+                    dest='pixel_weight', help='Pixel reconstruction loss weight',
                     default=1)
 parser.add_argument('--tv-weight', type=float,
-                    dest='tv_weight',
+                    dest='tv_weight', help='Total variation loss weight',
                     default=0)
 
 ### Train opts
 parser.add_argument('--learning-rate', type=float,
-                    dest='learning_rate',
-                    help='Learning rate',
+                    dest='learning_rate', help='Learning rate',
                     default=1e-4)
 parser.add_argument('--lr-decay', type=float,
-                    dest='lr_decay',
-                    help='Learning rate decay',
-                    default=5e-5)
+                    dest='lr_decay', help='Learning rate decay',
+                    default=0)
 parser.add_argument('--max-iter', type=int,
                     dest='max_iter', help='Max # of training iterations',
                     default=160000)
@@ -58,9 +56,7 @@ parser.add_argument('--save-iter', type=int,
 parser.add_argument('--summary-iter', type=int,
                     dest='summary_iter', help='Summary write frequency',
                     default=20)
-# parser.add_argument('--alpha', type=float,
-#                     dest='alpha',
-#                     default=1)
+
 args = parser.parse_args()
 
 
@@ -105,7 +101,9 @@ def train():
 
         def enqueue(sess):
             content_images = batch_gen(args.content_path, batch_shape)
-            val_images     = batch_gen(args.val_path, batch_shape)
+            val_path = args.val_path if args.val_path is not None else args.content_path
+            val_images = batch_gen(val_path, batch_shape)
+
             while True:
                 content_batch = next(content_images)
                 val_batch     = next(val_images)
@@ -113,16 +111,16 @@ def train():
                 sess.run(enqueue_op, feed_dict={queue_input_content: content_batch,
                                                 queue_input_val:     val_batch})
 
-        ### Build the model graph and train/summary ops
+        ### Build the model graph & train/summary ops and get the EncoderDecoder
         model = WCTModel(mode='train',
-                           relu_targets=[args.relu_target],
-                           vgg_path=args.vgg_path,
-                           batch_size=args.batch_size,
-                           feature_weight=args.feature_weight, 
-                           pixel_weight=args.pixel_weight,
-                           tv_weight=args.tv_weight,
-                           learning_rate=args.learning_rate,
-                           lr_decay=args.lr_decay).encoder_decoders[0]
+                         relu_targets=[args.relu_target],
+                         vgg_path=args.vgg_path,
+                         batch_size=args.batch_size,
+                         feature_weight=args.feature_weight, 
+                         pixel_weight=args.pixel_weight,
+                         tv_weight=args.tv_weight,
+                         learning_rate=args.learning_rate,
+                         lr_decay=args.lr_decay).encoder_decoders[0]
 
         saver = tf.train.Saver(max_to_keep=None)
 
@@ -167,8 +165,6 @@ def train():
                     results = sess.run(fetches, feed_dict=feed_dict)
                 except Exception as e:
                     print(e)
-                    import IPython; IPython.embed()
-                    # Sometimes training NaNs out and has to be restarted. In that case, reload the last checkpoint and resume.
                     print("Exception encountered, re-loading latest checkpoint")
                     load_latest()
                     continue
