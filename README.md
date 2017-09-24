@@ -86,7 +86,7 @@ Additionally, `stylize.py` will stylize image files. The options are the same as
 ## Samples
 
 <p align='center'>
-  <img src='samples/gilbert_stylized.png' width='768px'>
+  <img src='samples/gilbert_stylize.png' width='768px'>
 </p>
 
 
