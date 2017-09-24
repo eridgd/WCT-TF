@@ -74,7 +74,7 @@ Additionally, `stylize.py` will stylize image files. The options are the same as
 
 `python train.py --relu-target relu3_1 --content-path /path/to/coco --batch-size 8 --feature-weight 1 --pixel-weight 1 --tv-weight 0 --checkpoint /path/to/checkpointdir --learning-rate 1e-4 --maxiter 15000`
 
-3. Monitor training with TensorBoard: `tensorboard --logdir /path/to/checkpointdir`
+4. Monitor training with TensorBoard: `tensorboard --logdir /path/to/checkpointdir`
 
 
 ## Notes
