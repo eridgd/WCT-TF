@@ -27,19 +27,19 @@ parser.add_argument('--height', type=int, help='Webcam video height', default=No
 parser.add_argument('--video-out', type=str, help="Save to output video file if not None", default=None)
 parser.add_argument('--fps', type=int, help="Frames Per Second for output video file", default=10)
 parser.add_argument('--scale', type=float, help="Scale the output image", default=1)
-parser.add_argument('--keep-colors', action='store_true', help="Preserve the colors of the style image", default=False)
+parser.add_argument('--keep-colors', action='store_true', help="Preserve the colors of the content image", default=False)
 parser.add_argument('--passes', type=int, help="# of stylization passes per content image", default=1)
 parser.add_argument('--device', type=str,
                         dest='device', help='Device to perform compute on',
                         default='/gpu:0')
 parser.add_argument('--style-size', type=int, help="Resize style image to this size before cropping", default=512)
-parser.add_argument('--crop-size', type=int, help="Crop to this square size, e.g. 256x256", default=0)
-parser.add_argument('--alpha', type=float, help="Alpha blend value", default=1)
+parser.add_argument('--crop-size', type=int, help="Crop a square from the style image", default=0)
+parser.add_argument('--alpha', type=float, help="Alpha blend value for WCT features", default=1)
 parser.add_argument('--concat', action='store_true', help="Concatenate style image and stylized output", default=False)
 # parser.add_argument('--interpolate', action='store_true', help="Interpolate between two images", default=False)
 parser.add_argument('--noise', action='store_true', help="Synthesize textures from noise images", default=False)
 parser.add_argument('-r', '--random', type=int, help='Load a random img every # iterations', default=0)
-parser.add_argument('--max-frames', type=int, help='Maximum # of frames', default=0)
+
 args = parser.parse_args()
 
 
@@ -119,9 +119,9 @@ class StyleWindow(object):
 def main():
     # Load the WCT model
     wct_model = WCT(checkpoints=args.checkpoints, 
-                          relu_targets=args.relu_targets,
-                          vgg_path=args.vgg_path, 
-                          device=args.device)
+                    relu_targets=args.relu_targets,
+                    vgg_path=args.vgg_path, 
+                    device=args.device)
 
     # Load a panel to control style settings
     style_window = StyleWindow(args.style_path, args.style_size, args.crop_size, args.scale, args.alpha)
@@ -152,9 +152,6 @@ def main():
     count = 0
 
     while(True):
-        if args.max_frames > 0 and count > args.max_frames:
-            break
-
         ret, frame = cap.read()
 
         if ret is True:       
@@ -202,14 +199,14 @@ def main():
             key = cv2.waitKey(10) 
             if key & 0xFF == ord('r'):   # Load new random style
                 style_window.set_style(random=True)
-            elif key & 0xFF == ord('c'):
+            elif key & 0xFF == ord('c'): # Toggle color preservation
                 keep_colors = not keep_colors
                 print('Switching to keep_colors',keep_colors)
-            elif key & 0xFF == ord('s'):
+            elif key & 0xFF == ord('s'): # Save stylized frame
                 out_f = "{}.png".format(time.time())
                 save_img(out_f, stylized_rgb)
                 print('Saved image to',out_f)
-            elif key & 0xFF == ord('q'): # Quit
+            elif key & 0xFF == ord('q'): # Quit gracefully
                 break
         else:
             break
