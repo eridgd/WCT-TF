@@ -107,6 +107,8 @@ class WCTModel(object):
                 tv_weight: Float weight for total variation loss
                 learning_rate: Float LR
                 lr_decay: Float linear decay for training
+            Returns:
+                EncoderDecoder namedtuple with input/encoding/output tensors and ops for training.
         '''
         with tf.name_scope('encoder_decoder_'+relu_target):
 
@@ -149,7 +151,7 @@ class WCTModel(object):
         if self.mode == 'train':  # Train & summary ops only needed for training phase
             ### Losses
             with tf.name_scope('losses_'+relu_target):
-                # Content loss between stylized encoding and WCT encoding
+                # Feature loss between encodings of original & reconstructed
                 feature_loss = feature_weight * mse(decoded_encoded, content_encoded)
 
                 # Pixel reconstruction loss between decoded/reconstructed img and original
@@ -252,19 +254,17 @@ class WCTModel(object):
 
         ### Work backwards from deepest decoder # and build layer by layer
         decoders = reversed(range(1, decoder_num+1))
-
         count = 0        
-
         for decoder_num in decoders:
             for layer_tup in decoder_archs[decoder_num]:
-                layer_name = '{}_{}'.format(relu_target, count)
+                layer_name = '{}_{}'.format(relu_target, count) # Unique layer names are needed to ensure var naming consistency with multiple decoders in graph
                 if layer_tup[0] == Conv2DReflect:
                     x = layer_tup[0](layer_name, *layer_tup[1:], padding='valid', activation='relu', name=layer_name)(x)
                 elif layer_tup[0] == UpSampling2D:
                     x = layer_tup[0](name=layer_name)(x)
                 count += 1
 
-        layer_name = '{}_{}'.format(relu_target, count) # Unique layer names are needed to ensure var naming consistency with multiple decoders in graph
+        layer_name = '{}_{}'.format(relu_target, count) 
         output = Conv2DReflect(layer_name, 3, 3, padding='valid', activation=None, name=layer_name)(x)  # 256x256 / 64->3
         
         decoder_model = Model(code, output, name='decoder_model_'+relu_target)

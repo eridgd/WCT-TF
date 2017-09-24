@@ -51,7 +51,6 @@ Other args to take note of:
 * `--keep-colors`  Apply CORAL transform to preserve colors of content
 * `--device`  Device to perform compute on, default `/gpu:0`
 * `--concat`  Append the style image to the stylized output
-* `--interpolate`  Interpolate between AdaIN features of two random images
 * `--noise`  Generate textures from random noise image instead of webcam
 * `--random`  Load a new random image every # of frames
 

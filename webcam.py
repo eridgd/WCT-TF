@@ -36,7 +36,7 @@ parser.add_argument('--style-size', type=int, help="Resize style image to this s
 parser.add_argument('--crop-size', type=int, help="Crop to this square size, e.g. 256x256", default=0)
 parser.add_argument('--alpha', type=float, help="Alpha blend value", default=1)
 parser.add_argument('--concat', action='store_true', help="Concatenate style image and stylized output", default=False)
-parser.add_argument('--interpolate', action='store_true', help="Interpolate between two images", default=False)
+# parser.add_argument('--interpolate', action='store_true', help="Interpolate between two images", default=False)
 parser.add_argument('--noise', action='store_true', help="Synthesize textures from noise images", default=False)
 parser.add_argument('-r', '--random', type=int, help='Load a random img every # iterations', default=0)
 parser.add_argument('--max-frames', type=int, help='Maximum # of frames', default=0)
@@ -46,14 +46,13 @@ args = parser.parse_args()
 class StyleWindow(object):
     '''Helper class to handle style image settings'''
 
-    def __init__(self, style_path, img_size=512, crop_size=512, scale=1, alpha=1, interpolate=False):
+    def __init__(self, style_path, img_size=512, crop_size=512, scale=1, alpha=1):
         if os.path.isdir(style_path):
             self.style_imgs = get_files(style_path)
         else:
             self.style_imgs = [style_path]  # Single image instead of folder
 
-        # Create room for two styles for interpolation
-        self.style_rgbs = [None, None]
+        self.style_rgb = None
 
         self.img_size = img_size
         self.crop_size = crop_size
@@ -77,16 +76,9 @@ class StyleWindow(object):
         # Scale the content before processing
         cv2.createTrackbar('scale','Style Controls', int(self.scale*100), 200, self.set_scale)
 
-        self.set_style(random=True, window='Style Controls', style_idx=0)
+        self.set_style(random=True, window='Style Controls')
 
-        if interpolate:
-            # Create a window to show second style image for interpolation
-            cv2.namedWindow('style2')
-            self.interp_weight = 1.
-            cv2.createTrackbar('interpolation','Style Controls', 100, 100, self.set_interp)
-            self.set_style(random=True, style_idx=1, window='style2')
-
-    def set_style(self, idx=None, random=False, style_idx=0, window='Style Controls'):
+    def set_style(self, idx=None, random=False, window='Style Controls'):
         if idx is not None:
             self.idx = idx
         if random:
@@ -95,10 +87,10 @@ class StyleWindow(object):
         style_file = self.style_imgs[self.idx]
         print('Loading style image',style_file)
         if self.crop_size > 0:
-            self.style_rgbs[style_idx] = get_img_crop(style_file, resize=self.img_size, crop=self.crop_size)
+            self.style_rgb = get_img_crop(style_file, resize=self.img_size, crop=self.crop_size)
         else:
-            self.style_rgbs[style_idx] = resize_to(get_img(style_file), self.img_size)
-        self.show_style(window, self.style_rgbs[style_idx])
+            self.style_rgb = resize_to(get_img(style_file), self.img_size)
+        self.show_style(window, self.style_rgb)
 
     def set_idx(self, idx):
         self.set_style(idx)
@@ -132,7 +124,7 @@ def main():
                           device=args.device)
 
     # Load a panel to control style settings
-    style_window = StyleWindow(args.style_path, args.style_size, args.crop_size, args.scale, args.alpha, args.interpolate)
+    style_window = StyleWindow(args.style_path, args.style_size, args.crop_size, args.scale, args.alpha)
 
     # Start the webcam stream
     cap = WebcamVideoStream(args.video_source, args.width, args.height).start()
@@ -177,33 +169,22 @@ def main():
             content_rgb = cv2.cvtColor(frame_resize, cv2.COLOR_BGR2RGB)  # OpenCV uses BGR, we need RGB
 
             if args.random > 0 and count % args.random == 0:
-                style_window.set_style(random=True, style_idx=0)
+                style_window.set_style(random=True)
 
             if keep_colors:
-                style_rgb = preserve_colors_np(style_window.style_rgbs[0], content_rgb)
+                style_rgb = preserve_colors_np(style_window.style_rgb, content_rgb)
             else:
-                style_rgb = style_window.style_rgbs[0]
+                style_rgb = style_window.style_rgb
 
-            # For best results style img should be comparable size to content
-            # style_rgb = resize_to(style_rgb, min(content_rgb.shape[0], content_rgb.shape[1]))
+            # Run the frame through the style network
+            stylized_rgb = wct_model.predict(content_rgb, style_rgb, style_window.alpha)
 
-            if args.interpolate is False:
-                # Run the frame through the style network
-                stylized_rgb = wct_model.predict(content_rgb, style_rgb, style_window.alpha)
-
-                if args.passes > 1:
-                    for i in range(args.passes-1):
-                        stylized_rgb = wct_model.predict(stylized_rgb, style_rgb, style_window.alpha)
-                # stylized_rgb = wct_model.predict_np(content_rgb, style_rgb, style_window.alpha) # Numpy version
-            # else: ## TODO Implement interpolation
-            #     interp_weights = [style_window.interp_weight, 1 - style_window.interp_weight]
-            #     stylized_rgb = wct_model.predict_interpolate(content_rgb, 
-            #                                               style_window.style_rgbs,
-            #                                               interp_weights,
-            #                                               style_window.alpha)
+            if args.passes > 1:
+                for i in range(args.passes-1):
+                    stylized_rgb = wct_model.predict(stylized_rgb, style_rgb, style_window.alpha)
 
             # Stitch the style + stylized output together, but only if there's one style image
-            if args.concat and args.interpolate is False:
+            if args.concat:
                 # Resize style img to same height as frame
                 style_rgb_resized = cv2.resize(style_rgb, (stylized_rgb.shape[0], stylized_rgb.shape[0]))
                 stylized_rgb = np.hstack([style_rgb_resized, stylized_rgb])
@@ -220,9 +201,7 @@ def main():
 
             key = cv2.waitKey(10) 
             if key & 0xFF == ord('r'):   # Load new random style
-                style_window.set_style(random=True, style_idx=0)
-                if args.interpolate:     # Load a a second style if interpolating
-                    style_window.set_style(random=True, style_idx=1, window='style2')    
+                style_window.set_style(random=True)
             elif key & 0xFF == ord('c'):
                 keep_colors = not keep_colors
                 print('Switching to keep_colors',keep_colors)
