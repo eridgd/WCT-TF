@@ -104,7 +104,8 @@ def main():
             if args.concat:
                 # Resize style img to same height as frame
                 style_img_resized = scipy.misc.imresize(style_img, (stylized_rgb.shape[0], stylized_rgb.shape[0]))
-                stylized_rgb = np.hstack([style_img_resized, stylized_rgb])
+                margin = np.ones((style_img_resized.shape[0], 10, 3)) * 255
+                stylized_rgb = np.hstack([style_img_resized, margin, stylized_rgb])
 
             # Format for out filename: {out_path}/{content_prefix}_{style_prefix}.{content_ext}
             out_f = os.path.join(args.out_path, '{}_{}{}'.format(content_prefix, style_prefix, content_ext))

@@ -83,6 +83,12 @@ Additionally, `stylize.py` will stylize image files. The options are the same as
 * The stylization pipeline can be hooked up with decoders in any order. For instance, to reproduce the (sub-optimal) reversed fine-to-coarse pipeline in figure 5(d) from the original paper use the option `--relu-targets relu1_1 relu2_1 relu3_1 relu4_1 relu5_1` in webcam.py/stylize.py. 
 * `coral.py` implements [CORellation ALignment](https://arxiv.org/abs/1612.01939) to transfer colors from the content image to the style image in order to preserve colors in the stylized output. The default method uses numpy, and I have also translated the author's CORAL code from Torch to PyTorch.
 
+## Samples
+
+<p align='center'>
+  <img src='samples/gilbert_stylized.png'>
+</p>
+
 
 ## Acknowledgments
 
