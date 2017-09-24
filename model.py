@@ -8,7 +8,6 @@ from keras.models import Model
 from keras.layers import Input, UpSampling2D, Lambda
 from ops import pad_reflect, Conv2DReflect, torch_decay
 from ops import wct_tf
-import functools
 from collections import namedtuple
 
 
@@ -226,27 +225,27 @@ class WCTModel(object):
 
         # Dict specifying the layers for each decoder level. relu5_1 is the deepest layer and will contain all layers
         decoder_archs = {
-            5: [ #    layer    filts kern    HxW  / InC->OutC                                     
-                (Conv2DReflect, 512, 3),  # 16x16 / 512->512
-                (UpSampling2D,),          # 16x16 -> 32x32
-                (Conv2DReflect, 512, 3),  # 32x32 / 512->512
-                (Conv2DReflect, 512, 3),  # 32x32 / 512->512
-                (Conv2DReflect, 512, 3)], # 32x32 / 512->512
+            5: [ #    layer    filts      HxW  / InC->OutC                                     
+                (Conv2DReflect, 512),  # 16x16 / 512->512
+                (UpSampling2D,),       # 16x16 -> 32x32
+                (Conv2DReflect, 512),  # 32x32 / 512->512
+                (Conv2DReflect, 512),  # 32x32 / 512->512
+                (Conv2DReflect, 512)], # 32x32 / 512->512
             4: [
-                (Conv2DReflect, 256, 3),  # 32x32 / 512->256
-                (UpSampling2D,),          # 32x32 -> 64x64
-                (Conv2DReflect, 256, 3),  # 64x64 / 256->256
-                (Conv2DReflect, 256, 3),  # 64x64 / 256->256
-                (Conv2DReflect, 256, 3)], # 64x64 / 256->256
+                (Conv2DReflect, 256),  # 32x32 / 512->256
+                (UpSampling2D,),       # 32x32 -> 64x64
+                (Conv2DReflect, 256),  # 64x64 / 256->256
+                (Conv2DReflect, 256),  # 64x64 / 256->256
+                (Conv2DReflect, 256)], # 64x64 / 256->256
             3: [
-                (Conv2DReflect, 128, 3),  # 64x64 / 256->128
-                (UpSampling2D,),          # 64x64 -> 128x128
-                (Conv2DReflect, 128, 3)], # 128x128 / 128->128
+                (Conv2DReflect, 128),  # 64x64 / 256->128
+                (UpSampling2D,),       # 64x64 -> 128x128
+                (Conv2DReflect, 128)], # 128x128 / 128->128
             2: [
-                (Conv2DReflect, 64, 3),   # 128x128 / 128->64
-                (UpSampling2D,)],         # 128x128 -> 256x256
+                (Conv2DReflect, 64),   # 128x128 / 128->64
+                (UpSampling2D,)],      # 128x128 -> 256x256
             1: [
-                (Conv2DReflect, 64, 3)]   # 256x256 / 64->64
+                (Conv2DReflect, 64)]   # 256x256 / 64->64
         }
 
         code = Input(shape=input_shape, name='decoder_input_'+relu_target)
@@ -259,9 +258,9 @@ class WCTModel(object):
             for layer_tup in decoder_archs[decoder_num]:
                 layer_name = '{}_{}'.format(relu_target, count) # Unique layer names are needed to ensure var naming consistency with multiple decoders in graph
                 if layer_tup[0] == Conv2DReflect:
-                    x = layer_tup[0](layer_name, *layer_tup[1:], padding='valid', activation='relu', name=layer_name)(x)
+                    x = Conv2DReflect(layer_name, filters=layer_tup[1], kernel_size=3, padding='valid', activation='relu', name=layer_name)(x)
                 elif layer_tup[0] == UpSampling2D:
-                    x = layer_tup[0](name=layer_name)(x)
+                    x = UpSampling2D(name=layer_name)(x)
                 count += 1
 
         layer_name = '{}_{}'.format(relu_target, count) 
