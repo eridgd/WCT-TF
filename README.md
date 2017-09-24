@@ -98,6 +98,6 @@ Many thanks to the authors Yijun Li & collaborators at Adobe for their work that
 ## TODO
 
 - [ ] Interpolation between styles
-- [ ] Video stylizatino
+- [ ] Video stylization
 - [ ] Webcam style window threading
 - [ ] Forget this static graph nonsense and redo everything in PyTorch
