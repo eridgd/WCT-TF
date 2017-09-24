@@ -91,7 +91,9 @@ Additionally, `stylize.py` will stylize image files. The options are the same as
 
 ## Acknowledgments
 
-Many thanks to the authors Yijun Li & collaborators at Adobe/UC Merced for their work that inspired this fun project. After building the first version of this TF implementation I discovered their [official Torch implementation](https://github.com/Yijunmaverick/UniversalStyleTransfer) that I referred to in tweaking the WCT op to be more stable. 
+Many thanks to the authors Yijun Li & collaborators at Adobe/UC Merced for their work that inspired this fun project. After building the first version of this TF implementation I discovered their [official Torch implementation](https://github.com/Yijunmaverick/UniversalStyleTransfer) that I referred to in tweaking the WCT op to be more stable.
+
+Thanks also to Xun Huang for the normalized VGG and [Torch version of CORAL](https://github.com/xunhuang1995/AdaIN-style/blob/master/lib/utils.lua).
 
 
 ## TODO
