@@ -72,7 +72,7 @@ There are also four keyboard shortcuts:
 
 3. Train one decoder per relu target layer. E.g. to train a decoder to reconstruct from relu3_1:
 
-`python train.py --relu-target relu3_1 --content-path /path/to/coco --batch-size 8 --feature-weight 1 --pixel-weight 1 --tv-weight 0 --checkpoint /path/to/checkpointdir --learning-rate 1e-4 --maxiter 15000`
+`python train.py --relu-target relu3_1 --content-path /path/to/coco --batch-size 8 --feature-weight 1 --pixel-weight 1 --tv-weight 0 --checkpoint /path/to/checkpointdir --learning-rate 1e-4 --max-iter 15000`
 
 4. Monitor training with TensorBoard: `tensorboard --logdir /path/to/checkpointdir`
 
