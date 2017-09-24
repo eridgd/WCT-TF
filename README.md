@@ -66,7 +66,7 @@ Additionally, `stylize.py` will stylize image files. The options are the same as
 
 ## Training
 
-1. Download [MS COCO images](http://mscoco.org/dataset/#download).
+1. Download [MS COCO images](http://mscoco.org/dataset/#download) for content data.
 
 2. Download VGG19 model: `bash models/download_vgg.sh`
 
@@ -91,7 +91,7 @@ Additionally, `stylize.py` will stylize image files. The options are the same as
 
 ## Acknowledgments
 
-Many thanks to the authors Yijun Li & collaborators at Adobe for their work that inspired this fun project. After building the first version of this TF implementation I discovered their [official Torch implementation](https://github.com/Yijunmaverick/UniversalStyleTransfer) that I referred to in tweaking the WCT op to be more stable. 
+Many thanks to the authors Yijun Li & collaborators at Adobe/UC Merced for their work that inspired this fun project. After building the first version of this TF implementation I discovered their [official Torch implementation](https://github.com/Yijunmaverick/UniversalStyleTransfer) that I referred to in tweaking the WCT op to be more stable. 
 
 
 ## TODO
