@@ -56,6 +56,9 @@ parser.add_argument('--save-iter', type=int,
 parser.add_argument('--summary-iter', type=int,
                     dest='summary_iter', help='Summary write frequency',
                     default=20)
+parser.add_argument('--max-to-keep', type=int,
+                    dest='max_to_keep', help='Max # of checkpoints to keep around',
+                    default=10)
 
 args = parser.parse_args()
 
@@ -122,7 +125,7 @@ def train():
                          learning_rate=args.learning_rate,
                          lr_decay=args.lr_decay).encoder_decoders[0]
 
-        saver = tf.train.Saver(max_to_keep=None)
+        saver = tf.train.Saver(max_to_keep=args.max_to_keep)
 
         config = tf.ConfigProto()
         config.gpu_options.allow_growth=True
