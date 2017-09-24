@@ -28,7 +28,7 @@ Optionally:
 
 2. Download checkpoints for the five decoders: `bash models/download_models.sh`
 
-3. Obtain style images, e.g. from the [Wikiart dataset](https://www.kaggle.com/c/painter-by-numbers)
+3. Obtain style images. Two good sources are the [Wikiart dataset](https://www.kaggle.com/c/painter-by-numbers) and [Describable Textures Dataset](https://www.robots.ox.ac.uk/~vgg/data/dtd/).
 
 4. Run stylization for live video with `webcam.py` or for images with `stylize.py`. Both scripts share the same required arguments. For instance, to run a multi-level stylization pipeline that goes from relu5_1 -> relu4_1 -> relu3_1 -> relu2_1 -> relu1_1:
 
