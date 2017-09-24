@@ -29,7 +29,7 @@ parser.add_argument('--vgg-path', type=str,
 ### Loss weights
 parser.add_argument('--feature-weight', type=float,
                     dest='feature_weight',
-                    default=1e-2)
+                    default=1)
 parser.add_argument('--pixel-weight', type=float,
                     dest='pixel_weight',
                     default=1)

@@ -19,7 +19,7 @@ def Conv2DReflect(lambda_name, *args, **kwargs):
 
 ### Whiten-Color Transform ops ###
 
-def wct_tf(content, style, alpha, eps=1e-6):
+def wct_tf(content, style, alpha, eps=1):
     '''TensorFlow version of Whiten-Color Transform
        Assume that: 1) content/style encodings are stacked in first two rows
        and 2) they have shape format HxWxC
