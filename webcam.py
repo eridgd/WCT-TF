@@ -225,13 +225,11 @@ def main():
                     style_window.set_style(random=True, style_idx=1, window='style2')    
             elif key & 0xFF == ord('c'):
                 keep_colors = not keep_colors
-                print("Switching to keep_colors",keep_colors)
-            elif key & 0xFF == ord('c'):
-                keep_colors = not keep_colors
-                print("Switching to keep_colors",keep_colors)
+                print('Switching to keep_colors',keep_colors)
             elif key & 0xFF == ord('s'):
                 out_f = "{}.png".format(time.time())
                 save_img(out_f, stylized_rgb)
+                print('Saved image to',out_f)
             elif key & 0xFF == ord('q'): # Quit
                 break
         else:
