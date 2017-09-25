@@ -14,7 +14,9 @@ from collections import namedtuple
 ### Helpers ###
 
 mse = tf.losses.mean_squared_error
+
 clip = lambda x: tf.clip_by_value(x, 0, 1)
+
 EncoderDecoder = namedtuple('EncoderDecoder', 
                             'content_input content_encoder_model content_encoded \
                              style_encoded \
