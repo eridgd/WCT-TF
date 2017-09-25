@@ -12,6 +12,7 @@ from collections import namedtuple
 
 
 ### Helpers ###
+
 mse = tf.losses.mean_squared_error
 clip = lambda x: tf.clip_by_value(x, 0, 1)
 EncoderDecoder = namedtuple('EncoderDecoder', 
@@ -22,7 +23,7 @@ EncoderDecoder = namedtuple('EncoderDecoder',
                              train_op learning_rate global_step \
                              summary_op')
 
-### Model Graph ###
+### WCT Model Graph ###
 
 class WCTModel(object):
     '''Model graph for Universal Style Transfer via Feature Transforms from https://arxiv.org/abs/1703.06868'''
