@@ -1,14 +1,8 @@
-import keras.backend as K
-from keras.models import Model
-from keras.layers import Flatten, Input, Conv2D, UpSampling2D, Activation, Lambda, MaxPooling2D
-from keras.engine.topology import get_source_inputs
-from keras.utils import layer_utils
-from keras.utils.data_utils import get_file
-from keras.applications.imagenet_utils import decode_predictions
-from keras.applications.imagenet_utils import preprocess_input
-from keras.applications.imagenet_utils import _obtain_input_shape
 import numpy as np
 import tensorflow as tf
+import keras.backend as K
+from keras.models import Model
+from keras.layers import Input, Conv2D, UpSampling2D, Activation, Lambda, MaxPooling2D
 from ops import pad_reflect
 import torchfile
 
