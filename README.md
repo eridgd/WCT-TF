@@ -102,5 +102,7 @@ Thanks also to Xun Huang for the normalized VGG and [Torch version of CORAL](htt
 
 - [ ] Interpolation between styles
 - [ ] Video stylization
+- [ ] Spatial control/masking
+- [ ] [Style swap](https://github.com/rtqichen/style-swap)
 - [ ] Webcam style window threading
 - [ ] Forget this static graph nonsense and redo everything in PyTorch
