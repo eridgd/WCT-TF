@@ -25,6 +25,7 @@ EncoderDecoder = namedtuple('EncoderDecoder',
                              train_op learning_rate global_step \
                              summary_op')
 
+
 ### WCT Model Graph ###
 
 class WCTModel(object):
