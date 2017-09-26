@@ -6,8 +6,7 @@ from vgg_normalised import vgg_from_t7
 from keras import backend as K
 from keras.models import Model
 from keras.layers import Input, UpSampling2D, Lambda
-from ops import pad_reflect, Conv2DReflect, torch_decay
-from ops import wct_tf
+from ops import pad_reflect, Conv2DReflect, torch_decay, wct_tf
 from collections import namedtuple
 
 
@@ -43,7 +42,7 @@ class WCTModel(object):
         self.style_input = tf.placeholder_with_default(tf.constant([[[[0.,0.,0.]]]]), shape=(None, None, None, 3), name='style_img')
 
         # Flag for applying WCT, should only be True for test mode. Setting to False will pass through content encoding.
-        self.apply_wct =  tf.placeholder_with_default(tf.constant(False), shape=[])
+        self.apply_wct = tf.placeholder_with_default(tf.constant(False), shape=[])
 
         self.alpha = tf.placeholder_with_default(1., shape=[], name='alpha')
 
@@ -71,15 +70,16 @@ class WCTModel(object):
                 style_encodings = [style_encodings]
 
         # Build enc/decs for each target relu and hook the out of each decoder up to subsequent encoder input
-        for relu, style_encoded in zip(relu_targets, style_encodings):
+        for i, (relu, style_encoded) in enumerate(zip(relu_targets, style_encodings)):
             print('Building encoder/decoder for relu target',relu)
             
-            if relu == relu_targets[0]: 
+            if i == 0:
                 # Input tensor will be a placeholder for the first encoder/decoder
                 input_tensor = None
             else:
                 # Input to intermediate levels is the output from previous decoder
                 input_tensor = clip(self.encoder_decoders[-1].decoded)
+            
             enc_dec = self.build_model(relu, input_tensor=input_tensor, style_encoded_tensor=style_encoded, **kwargs)
         
             self.encoder_decoders.append(enc_dec)
@@ -98,7 +98,7 @@ class WCTModel(object):
                     tv_weight=0,
                     learning_rate=1e-4,
                     lr_decay=5e-5):
-        '''Build the encoderdecoder architecture for a given relu layer.
+        '''Build the EncoderDecoder architecture for a given relu layer.
 
             Args:
                 relu_target: Layer of VGG to decode from
@@ -117,9 +117,11 @@ class WCTModel(object):
 
             ### Build encoder for reluX_1
             with tf.name_scope('content_encoder_'+relu_target):
-                if input_tensor is None:  # This is the first level encoder that takes original content imgs
+                if input_tensor is None:  
+                    # This is the first level encoder that takes original content imgs
                     content_imgs = tf.placeholder_with_default(tf.constant([[[[0.,0.,0.]]]]), shape=(None, None, None, 3), name='content_imgs')
-                else:                     # This is an intermediate-level encoder that takes output tensor from previous level as input
+                else:                     
+                    # This is an intermediate-level encoder that takes output tensor from previous level as input
                     content_imgs = input_tensor  
 
                 # Build content layer encoding model
@@ -131,7 +133,7 @@ class WCTModel(object):
  
             ### Build style encoder & WCT if test mode
             if self.mode != 'train':                
-                # Apply WCT if flag is set to true. Otherwise, pass content_encoded along
+                # Apply WCT if flag is set to true. Otherwise, pass content_encoded along unchanged.
                 with tf.name_scope('wct_'+relu_target):
                     decoder_input = tf.cond(self.apply_wct, lambda: wct_tf(content_encoded, style_encoded_tensor, self.alpha), lambda: content_encoded)
             else:
@@ -258,17 +260,20 @@ class WCTModel(object):
         ### Work backwards from deepest decoder # and build layer by layer
         decoders = reversed(range(1, decoder_num+1))
         count = 0        
-        for decoder_num in decoders:
-            for layer_tup in decoder_archs[decoder_num]:
-                layer_name = '{}_{}'.format(relu_target, count) # Unique layer names are needed to ensure var naming consistency with multiple decoders in graph
+        for d in decoders:
+            for layer_tup in decoder_archs[d]:
+                # Unique layer names are needed to ensure var naming consistency with multiple decoders in graph
+                layer_name = '{}_{}'.format(relu_target, count)
+
                 if layer_tup[0] == Conv2DReflect:
                     x = Conv2DReflect(layer_name, filters=layer_tup[1], kernel_size=3, padding='valid', activation='relu', name=layer_name)(x)
                 elif layer_tup[0] == UpSampling2D:
                     x = UpSampling2D(name=layer_name)(x)
+                
                 count += 1
 
         layer_name = '{}_{}'.format(relu_target, count) 
-        output = Conv2DReflect(layer_name, 3, 3, padding='valid', activation=None, name=layer_name)(x)  # 256x256 / 64->3
+        output = Conv2DReflect(layer_name, filters=3, kernel_size=3, padding='valid', activation=None, name=layer_name)(x)  # 256x256 / 64->3
         
         decoder_model = Model(code, output, name='decoder_model_'+relu_target)
         print(decoder_model.summary())

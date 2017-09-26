@@ -104,6 +104,7 @@ def train():
 
         def enqueue(sess):
             content_images = batch_gen(args.content_path, batch_shape)
+            
             val_path = args.val_path if args.val_path is not None else args.content_path
             val_images = batch_gen(val_path, batch_shape)
 
