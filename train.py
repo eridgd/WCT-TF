@@ -46,7 +46,7 @@ parser.add_argument('--lr-decay', type=float,
                     default=0)
 parser.add_argument('--max-iter', type=int,
                     dest='max_iter', help='Max # of training iterations',
-                    default=160000)
+                    default=16000)
 parser.add_argument('--batch-size', type=int,
                     dest='batch_size', help='Batch size',
                     default=8)
@@ -64,7 +64,7 @@ args = parser.parse_args()
 
 
 def batch_gen(folder, batch_shape):
-    '''Resize images to 256, randomly crop a 256 square, and normalize'''
+    '''Resize images to 512, randomly crop a 256 square, and normalize'''
     files = np.asarray(get_files(folder))
     while True:
         X_batch = np.zeros(batch_shape, dtype=np.float32)
@@ -115,7 +115,7 @@ def train():
                 sess.run(enqueue_op, feed_dict={queue_input_content: content_batch,
                                                 queue_input_val:     val_batch})
 
-        ### Build the model graph & train/summary ops and get the EncoderDecoder
+        ### Build the model graph & train/summary ops, and get the EncoderDecoder
         model = WCTModel(mode='train',
                          relu_targets=[args.relu_target],
                          vgg_path=args.vgg_path,
@@ -185,7 +185,12 @@ def train():
                     print("Model saved in file: %s" % save_path)
 
                 ### Log training stats
-                print("Step: {}  LR: {:.7f}  Feature: {:.5f}  Pixel: {:.5f}  TV: {:.5f}  Time: {:.5f}".format(results['global_step'], results['lr'], results['feature_loss'], results['pixel_loss'], results['tv_loss'], time.time() - start))
+                print("Step: {}  LR: {:.7f}  Feature: {:.5f}  Pixel: {:.5f}  TV: {:.5f}  Time: {:.5f}".format(results['global_step'], 
+                                                                                                              results['lr'], 
+                                                                                                              results['feature_loss'], 
+                                                                                                              results['pixel_loss'], 
+                                                                                                              results['tv_loss'], 
+                                                                                                              time.time() - start))
 
             # Last save
             save_path = saver.save(sess, os.path.join(args.checkpoint, 'model.ckpt'), results['global_step'])
