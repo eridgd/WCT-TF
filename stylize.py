@@ -8,7 +8,6 @@ import tensorflow as tf
 from utils import preserve_colors_np
 from utils import get_files, get_img, get_img_crop, save_img, resize_to, center_crop
 import scipy
-from scipy.ndimage.filters import gaussian_filter
 import time
 from wct import WCT
 
@@ -43,9 +42,9 @@ def main():
 
     # Load the WCT model
     wct_model = WCT(checkpoints=args.checkpoints, 
-                             relu_targets=args.relu_targets,
-                             vgg_path=args.vgg_path, 
-                             device=args.device)
+                                relu_targets=args.relu_targets,
+                                vgg_path=args.vgg_path, 
+                                device=args.device)
 
     # Get content & style full paths
     if os.path.isdir(args.content_path):

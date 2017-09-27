@@ -21,8 +21,7 @@ def Conv2DReflect(lambda_name, *args, **kwargs):
 
 def wct_tf(content, style, alpha, eps=1e-5):
     '''TensorFlow version of Whiten-Color Transform
-       Assume that: 1) content/style encodings are stacked in first two rows
-       and 2) they have shape format HxWxC
+       Assume that content/style encodings have shape 1xHxWxC
 
        See p.4 of the Universal Style Transfer paper for corresponding equations:
        https://arxiv.org/pdf/1705.08086.pdf
@@ -43,7 +42,7 @@ def wct_tf(content, style, alpha, eps=1e-5):
 
     fcfc = tf.matmul(fc, fc, transpose_b=True) / (tf.cast(H*W, tf.float32) - 1.) + tf.eye(C)*1.
     
-    Sc, Uc, Vc = tf.svd(fcfc, full_matrices=False)
+    Sc, Uc, Vc = tf.svd(fcfc, full_matrices=True)
 
     Dc_sq_inv = tf.diag(tf.pow(Sc + eps, -0.5))
 
@@ -54,7 +53,7 @@ def wct_tf(content, style, alpha, eps=1e-5):
 
     fsfs = tf.matmul(fs, fs, transpose_b=True) / (tf.cast(Hs*Ws, tf.float32) - 1.) + tf.eye(Cs)*1.
 
-    Ss, Us, Vs = tf.svd(fsfs, full_matrices=False)
+    Ss, Us, Vs = tf.svd(fsfs, full_matrices=True)
     
     Ds_sq = tf.diag(tf.pow(Ss + eps, 0.5))
 

@@ -229,7 +229,7 @@ class WCTModel(object):
         '''
         decoder_num = dict(zip(['relu1_1', 'relu2_1', 'relu3_1', 'relu4_1', 'relu5_1'], range(1,6)))[relu_target]
 
-        # Dict specifying the layers for each decoder level. relu5_1 is the deepest layer and will contain all layers
+        # Dict specifying the layers for each decoder level. relu5_1 is the deepest decoder and will contain all layers
         decoder_archs = {
             5: [ #    layer    filts      HxW  / InC->OutC                                     
                 (Conv2DReflect, 512),  # 16x16 / 512->512
