@@ -65,7 +65,7 @@ def wct_tf(content, style, alpha, eps=1e-5):
 
     # CxH*W -> CxHxW
     blended = tf.reshape(blended, (C,H,W))
-    # CxHxW -> NxHxWxC
+    # CxHxW -> 1xHxWxC
     blended = tf.expand_dims(tf.transpose(blended, (1,2,0)), 0)
 
     return blended
