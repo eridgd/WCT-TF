@@ -101,7 +101,7 @@ Thanks also to Xun Huang for the normalized VGG and [Torch version of CORAL](htt
 ## TODO
 
 - [ ] Interpolation between styles
-- [ ] Video stylization
+- [x] Video stylization
 - [ ] Spatial control/masking
 - [ ] [Style swap](https://github.com/rtqichen/style-swap)
 - [ ] Webcam style window threading
