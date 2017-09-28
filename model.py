@@ -198,7 +198,7 @@ class WCTModel(object):
                 summary_op = tf.summary.merge_all()
         else:
             # For inference set unnneeded ops to None
-            pixel_loss, feature_loss, tv_loss, total_loss, train_op, global_step, summary_op = [None]*7
+            pixel_loss, feature_loss, tv_loss, total_loss, train_op, global_step, learning_rate, summary_op = [None]*8
 
         # Put it all together
         encoder_decoder = EncoderDecoder(content_input=content_imgs, 
