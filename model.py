@@ -28,7 +28,7 @@ EncoderDecoder = namedtuple('EncoderDecoder',
 ### WCT Model Graph ###
 
 class WCTModel(object):
-    '''Model graph for Universal Style Transfer via Feature Transforms from https://arxiv.org/abs/1703.06868'''
+    '''Model graph for Universal Style Transfer via Feature Transforms from https://arxiv.org/abs/1705.08086'''
 
     def __init__(self, mode='train', relu_targets=['relu5_1','relu4_1','relu3_1','relu2_1','relu1_1'], vgg_path=None,  *args, **kwargs):
         '''
