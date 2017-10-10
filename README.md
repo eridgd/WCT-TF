@@ -4,6 +4,8 @@ This is a TensorFlow/Keras implementation of [Universal Style Transfer via Featu
 
 As in the original paper, reconstruction decoders for layers `reluX_1 (X=1,2,3,4,5)` are trained separately and then hooked up in a multi-level stylization pipeline in a single graph. To reduce memory usage, a single VGG encoder is loaded up to the deepest relu layer and is shared by all decoders.
 
+See [here](https://github.com/Yijunmaverick/UniversalStyleTransfer) for the official Torch implementation and [here](https://github.com/sunshineatnoon/PytorchWCT) for a PyTorch version.
+
 
 ## Requirements
 
