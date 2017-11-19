@@ -2,7 +2,6 @@ from __future__ import division, print_function
 
 import os
 import argparse
-import cv2
 import numpy as np
 import tensorflow as tf
 from utils import preserve_colors_np

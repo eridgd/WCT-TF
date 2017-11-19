@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 from utils import preserve_colors_np
 from utils import get_files, get_img, get_img_crop, resize_to, center_crop, save_img
-from utils import WebcamVideoStream, FPS
+from webcam_utils import WebcamVideoStream, FPS
 from wct import WCT
 
 
