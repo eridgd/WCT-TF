@@ -7,12 +7,21 @@ As in the original paper, reconstruction decoders for layers `reluX_1 (X=1,2,3,4
 See [here](https://github.com/Yijunmaverick/UniversalStyleTransfer) for the official Torch implementation and [here](https://github.com/sunshineatnoon/PytorchWCT) for a PyTorch version.
 
 
+## Samples
+
+<p align='center'>
+  <img src='samples/gilbert.jpg' width='350px'>
+  <img src='samples/gilbert_stylize.png' width='768px'>
+</p>
+
+
 ## Requirements
 
 * Python 3.x
 * tensorflow 1.2.1+
 * keras 2.0.x
 * torchfile 
+* scikit-image
 
 Optionally:
 
@@ -77,19 +86,12 @@ There are also four keyboard shortcuts:
 4. Monitor training with TensorBoard: `tensorboard --logdir /path/to/checkpointdir`
 
 
-## Samples
-
-<p align='center'>
-  <img src='samples/gilbert.jpg' width='350px'>
-  <img src='samples/gilbert_stylize.png' width='768px'>
-</p>
-
-
 ## Notes
 
 * This repo is based on [my implementation](https://github.com/eridgd/AdaIN-TF/) of [Arbitrary Style Transfer in Real-time with Adaptive Instance Normalization](https://arxiv.org/abs/1703.06868) by Huang et al.
 * The stylization pipeline can be hooked up with decoders in any order. For instance, to reproduce the (sub-optimal) reversed fine-to-coarse pipeline in figure 5(d) from the original paper use the option `--relu-targets relu1_1 relu2_1 relu3_1 relu4_1 relu5_1` in webcam.py/stylize.py. 
 * `coral.py` implements [CORellation ALignment](https://arxiv.org/abs/1612.01939) to transfer colors from the content image to the style image in order to preserve colors in the stylized output. The default method uses NumPy and there is also a commented out version in PyTorch that is slightly faster.
+* WCT involves two tf.svd() ops, which as of TF r1.4 has a GPU implementation. However, this appears to be 2-4x slower than the CPU version and so is explicitly executed on `/cpu:0` in ops.py. [See here](https://github.com/tensorflow/tensorflow/issues/13603) for an interesting discussion of the issue.
 
 
 ## Acknowledgments

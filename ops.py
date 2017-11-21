@@ -42,7 +42,8 @@ def wct_tf(content, style, alpha, eps=1e-5):
 
     fcfc = tf.matmul(fc, fc, transpose_b=True) / (tf.cast(H*W, tf.float32) - 1.) + tf.eye(C)*1.
     
-    Sc, Uc, Vc = tf.svd(fcfc, full_matrices=True)
+    with tf.device('/cpu:0'):  # tf.svd is slower on GPU, see https://github.com/tensorflow/tensorflow/issues/13603
+        Sc, Uc, Vc = tf.svd(fcfc, full_matrices=True)
 
     Dc_sq_inv = tf.diag(tf.pow(Sc + eps, -0.5))
 
@@ -53,7 +54,8 @@ def wct_tf(content, style, alpha, eps=1e-5):
 
     fsfs = tf.matmul(fs, fs, transpose_b=True) / (tf.cast(Hs*Ws, tf.float32) - 1.) + tf.eye(Cs)*1.
 
-    Ss, Us, Vs = tf.svd(fsfs, full_matrices=True)
+    with tf.device('/cpu:0'):  # tf.svd is slower on GPU, see https://github.com/tensorflow/tensorflow/issues/13603
+        Ss, Us, Vs = tf.svd(fsfs, full_matrices=True)
     
     Ds_sq = tf.diag(tf.pow(Ss + eps, 0.5))
 
