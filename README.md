@@ -91,7 +91,7 @@ There are also four keyboard shortcuts:
 * This repo is based on [my implementation](https://github.com/eridgd/AdaIN-TF/) of [Arbitrary Style Transfer in Real-time with Adaptive Instance Normalization](https://arxiv.org/abs/1703.06868) by Huang et al.
 * The stylization pipeline can be hooked up with decoders in any order. For instance, to reproduce the (sub-optimal) reversed fine-to-coarse pipeline in figure 5(d) from the original paper use the option `--relu-targets relu1_1 relu2_1 relu3_1 relu4_1 relu5_1` in webcam.py/stylize.py. 
 * `coral.py` implements [CORellation ALignment](https://arxiv.org/abs/1612.01939) to transfer colors from the content image to the style image in order to preserve colors in the stylized output. The default method uses NumPy and there is also a commented out version in PyTorch that is slightly faster.
-* WCT involves two tf.svd() ops, which as of TF r1.4 has a GPU implementation. However, this appears to be 2-4x slower than the CPU version and so is explicitly executed on `/cpu:0` in ops.py. [See here](https://github.com/tensorflow/tensorflow/issues/13603) for an interesting discussion of the issue.
+* The original code used tf.svd as part of the WCT. This was changed to use np.linalg.svd through tf.py_func instead because 1) the CPU implementation of tf.svd segfaults for a small percentage of matrices ([see here](https://github.com/tensorflow/tensorflow/issues/9234?imz_s=pac1ubp9u91mfvnfunoj8k9gb6)), and 2) TF r1.4 has a stable GPU implementation, but it appears to be 2-4x slower ([see here](https://github.com/tensorflow/tensorflow/issues/13603) for an interesting discussion of the issue).
 
 
 ## Acknowledgments

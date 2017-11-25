@@ -19,6 +19,11 @@ def Conv2DReflect(lambda_name, *args, **kwargs):
 
 ### Whiten-Color Transform ops ###
 
+def np_svd(tensor):
+    '''tf.py_func helper to run SVD with NumPy'''
+    u, s, _ = np.linalg.svd(tensor)
+    return u, s
+
 def wct_tf(content, style, alpha, eps=1e-5):
     '''TensorFlow version of Whiten-Color Transform
        Assume that content/style encodings have shape 1xHxWxC
@@ -40,10 +45,9 @@ def wct_tf(content, style, alpha, eps=1e-5):
     mc = tf.reduce_mean(content_flat, axis=1, keep_dims=True)
     fc = content_flat - mc
 
-    fcfc = tf.matmul(fc, fc, transpose_b=True) / (tf.cast(H*W, tf.float32) - 1.) + tf.eye(C)*1.
-    
-    with tf.device('/cpu:0'):  # tf.svd is slower on GPU, see https://github.com/tensorflow/tensorflow/issues/13603
-        Sc, Uc, Vc = tf.svd(fcfc, full_matrices=True)
+    fcfc = tf.matmul(fc, fc, transpose_b=True) / (tf.cast(H*W, tf.float32) - 1.)
+
+    Uc, Sc = tf.py_func(np_svd, [fcfc], [tf.float32, tf.float32])
 
     Dc_sq_inv = tf.diag(tf.pow(Sc + eps, -0.5))
 
@@ -52,11 +56,10 @@ def wct_tf(content, style, alpha, eps=1e-5):
     ms = tf.reduce_mean(style_flat, axis=1, keep_dims=True)
     fs = style_flat - ms
 
-    fsfs = tf.matmul(fs, fs, transpose_b=True) / (tf.cast(Hs*Ws, tf.float32) - 1.) + tf.eye(Cs)*1.
+    fsfs = tf.matmul(fs, fs, transpose_b=True) / (tf.cast(Hs*Ws, tf.float32) - 1.)
 
-    with tf.device('/cpu:0'):  # tf.svd is slower on GPU, see https://github.com/tensorflow/tensorflow/issues/13603
-        Ss, Us, Vs = tf.svd(fsfs, full_matrices=True)
-    
+    Us, Ss = tf.py_func(np_svd, [fsfs], [tf.float32, tf.float32])
+
     Ds_sq = tf.diag(tf.pow(Ss + eps, 0.5))
 
     fcs_hat = tf.matmul(tf.matmul(tf.matmul(Us, Ds_sq), Us, transpose_b=True), fc_hat)
