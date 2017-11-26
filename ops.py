@@ -19,10 +19,11 @@ def Conv2DReflect(lambda_name, *args, **kwargs):
 
 ### Whiten-Color Transform ops ###
 
-def np_svd(tensor):
-    '''tf.py_func helper to run SVD with NumPy'''
-    u, s, _ = np.linalg.svd(tensor)
-    return u, s
+def np_svd(content, style):
+    '''tf.py_func helper to run SVD with NumPy for content/style cov tensors'''
+    Uc, Sc, _ = np.linalg.svd(content)
+    Us, Ss, _ = np.linalg.svd(style)
+    return Uc, Sc, Us, Ss
 
 def wct_tf(content, style, alpha, eps=1e-5):
     '''TensorFlow version of Whiten-Color Transform
@@ -35,41 +36,48 @@ def wct_tf(content, style, alpha, eps=1e-5):
     content_t = tf.transpose(tf.squeeze(content), (2, 0, 1))
     style_t = tf.transpose(tf.squeeze(style), (2, 0, 1))
 
-    C, H, W = tf.unstack(tf.shape(content_t))
+    Cc, Hc, Wc = tf.unstack(tf.shape(content_t))
     Cs, Hs, Ws = tf.unstack(tf.shape(style_t))
 
     # CxHxW -> CxH*W
-    content_flat = tf.reshape(content_t, (C, H*W))
-    style_flat = tf.reshape(style_t, (C, Hs*Ws))
+    content_flat = tf.reshape(content_t, (Cc, Hc*Wc))
+    style_flat = tf.reshape(style_t, (Cs, Hs*Ws))
 
+    # Content covariance
     mc = tf.reduce_mean(content_flat, axis=1, keep_dims=True)
     fc = content_flat - mc
+    fcfc = tf.matmul(fc, fc, transpose_b=True) / (tf.cast(Hc*Wc, tf.float32) - 1.)
 
-    fcfc = tf.matmul(fc, fc, transpose_b=True) / (tf.cast(H*W, tf.float32) - 1.)
-
-    Uc, Sc = tf.py_func(np_svd, [fcfc], [tf.float32, tf.float32])
-
-    Dc_sq_inv = tf.diag(tf.pow(Sc + eps, -0.5))
-
-    fc_hat = tf.matmul(tf.matmul(tf.matmul(Uc, Dc_sq_inv), Uc, transpose_b=True), fc)
-
+    # Style covariance
     ms = tf.reduce_mean(style_flat, axis=1, keep_dims=True)
     fs = style_flat - ms
-
     fsfs = tf.matmul(fs, fs, transpose_b=True) / (tf.cast(Hs*Ws, tf.float32) - 1.)
 
-    Us, Ss = tf.py_func(np_svd, [fsfs], [tf.float32, tf.float32])
+    # Perform SVD for content/style with np in one call to limit memory copy overhead
+    Uc, Sc, Us, Ss = tf.py_func(np_svd, [fcfc, fsfs], [tf.float32, tf.float32, tf.float32, tf.float32])
 
-    Ds_sq = tf.diag(tf.pow(Ss + eps, 0.5))
+    ## Uncomment to calculate SVD using TF. On CPU this is fast but unstable - https://github.com/tensorflow/tensorflow/issues/9234
+    ## If using TF r1.4 this can be changed to /gpu:0, it's stable but very slow - https://github.com/tensorflow/tensorflow/issues/13603
+    # with tf.device('/cpu:0'):  
+    #     Sc, Uc, _ = tf.svd(fcfc)
+    #     Ss, Us, _ = tf.svd(fsfs)
 
-    fcs_hat = tf.matmul(tf.matmul(tf.matmul(Us, Ds_sq), Us, transpose_b=True), fc_hat)
+    # Whiten content feature
+    Dc = tf.diag(tf.pow(Sc + eps, -0.5))
+    fc_hat = tf.matmul(tf.matmul(tf.matmul(Uc, Dc), Uc, transpose_b=True), fc)
 
+    # Color content with style
+    Ds = tf.diag(tf.pow(Ss + eps, 0.5))
+    fcs_hat = tf.matmul(tf.matmul(tf.matmul(Us, Ds), Us, transpose_b=True), fc_hat)
+
+    # Re-center with mean of style
     fcs_hat = fcs_hat + ms
 
+    # Blend whiten-colored feature with original content feature
     blended = alpha * fcs_hat + (1 - alpha) * (fc + mc)
 
     # CxH*W -> CxHxW
-    blended = tf.reshape(blended, (C,H,W))
+    blended = tf.reshape(blended, (Cc,Hc,Wc))
     # CxHxW -> 1xHxWxC
     blended = tf.expand_dims(tf.transpose(blended, (1,2,0)), 0)
 
