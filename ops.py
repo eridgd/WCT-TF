@@ -62,13 +62,17 @@ def wct_tf(content, style, alpha, eps=1e-5):
     #     Sc, Uc, _ = tf.svd(fcfc)
     #     Ss, Us, _ = tf.svd(fsfs)
 
+    # Filter small singular values
+    k_c = tf.reduce_sum(tf.cast(tf.greater(Sc, 1e-5), tf.int32))
+    k_s = tf.reduce_sum(tf.cast(tf.greater(Ss, 1e-5), tf.int32))
+
     # Whiten content feature
-    Dc = tf.diag(tf.pow(Sc + eps, -0.5))
-    fc_hat = tf.matmul(tf.matmul(tf.matmul(Uc, Dc), Uc, transpose_b=True), fc)
+    Dc = tf.diag(tf.pow(Sc[:k_c] + eps, -0.5))
+    fc_hat = tf.matmul(tf.matmul(tf.matmul(Uc[:,:k_c], Dc), Uc[:,:k_c], transpose_b=True), fc)
 
     # Color content with style
-    Ds = tf.diag(tf.pow(Ss + eps, 0.5))
-    fcs_hat = tf.matmul(tf.matmul(tf.matmul(Us, Ds), Us, transpose_b=True), fc_hat)
+    Ds = tf.diag(tf.pow(Ss[:k_s] + eps, 0.5))
+    fcs_hat = tf.matmul(tf.matmul(tf.matmul(Us[:,:k_s], Ds), Us[:,:k_s], transpose_b=True), fc_hat)
 
     # Re-center with mean of style
     fcs_hat = fcs_hat + ms
