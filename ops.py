@@ -19,13 +19,7 @@ def Conv2DReflect(lambda_name, *args, **kwargs):
 
 ### Whiten-Color Transform ops ###
 
-def np_svd(content, style):
-    '''tf.py_func helper to run SVD with NumPy for content/style cov tensors'''
-    Uc, Sc, _ = np.linalg.svd(content)
-    Us, Ss, _ = np.linalg.svd(style)
-    return Uc, Sc, Us, Ss
-
-def wct_tf(content, style, alpha, eps=1e-5):
+def wct_tf(content, style, alpha, eps=1e-8):
     '''TensorFlow version of Whiten-Color Transform
        Assume that content/style encodings have shape 1xHxWxC
 
@@ -46,21 +40,26 @@ def wct_tf(content, style, alpha, eps=1e-5):
     # Content covariance
     mc = tf.reduce_mean(content_flat, axis=1, keep_dims=True)
     fc = content_flat - mc
-    fcfc = tf.matmul(fc, fc, transpose_b=True) / (tf.cast(Hc*Wc, tf.float32) - 1.)
+    fcfc = tf.matmul(fc, fc, transpose_b=True) / (tf.cast(Hc*Wc, tf.float32) - 1.) + tf.eye(Cc)*eps
 
     # Style covariance
     ms = tf.reduce_mean(style_flat, axis=1, keep_dims=True)
     fs = style_flat - ms
-    fsfs = tf.matmul(fs, fs, transpose_b=True) / (tf.cast(Hs*Ws, tf.float32) - 1.)
+    fsfs = tf.matmul(fs, fs, transpose_b=True) / (tf.cast(Hs*Ws, tf.float32) - 1.) + tf.eye(Cs)*eps
 
-    # Perform SVD for content/style with np in one call to limit memory copy overhead
-    Uc, Sc, Us, Ss = tf.py_func(np_svd, [fcfc, fsfs], [tf.float32, tf.float32, tf.float32, tf.float32])
+    # tf.svd is slower on GPU, see https://github.com/tensorflow/tensorflow/issues/13603
+    with tf.device('/cpu:0'):  
+        Sc, Uc, _ = tf.svd(fcfc)
+        Ss, Us, _ = tf.svd(fsfs)
 
-    ## Uncomment to calculate SVD using TF. On CPU this is fast but unstable - https://github.com/tensorflow/tensorflow/issues/9234
-    ## If using TF r1.4 this can be changed to /gpu:0, it's stable but very slow - https://github.com/tensorflow/tensorflow/issues/13603
-    # with tf.device('/cpu:0'):  
-    #     Sc, Uc, _ = tf.svd(fcfc)
-    #     Ss, Us, _ = tf.svd(fsfs)
+    ## Uncomment to perform SVD for content/style with np in one call
+    ## This is slower than CPU tf.svd but won't segfault for ill-conditioned matrices
+    # def np_svd(content, style):
+    #     '''tf.py_func helper to run SVD with NumPy for content/style cov tensors'''
+    #     Uc, Sc, _ = np.linalg.svd(content)
+    #     Us, Ss, _ = np.linalg.svd(style)
+    #     return Uc, Sc, Us, Ss
+    # Uc, Sc, Us, Ss = tf.py_func(np_svd, [fcfc, fsfs], [tf.float32, tf.float32, tf.float32, tf.float32])
 
     # Filter small singular values
     k_c = tf.reduce_sum(tf.cast(tf.greater(Sc, 1e-5), tf.int32))
