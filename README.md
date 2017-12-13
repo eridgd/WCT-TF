@@ -20,7 +20,7 @@ See [here](https://github.com/Yijunmaverick/UniversalStyleTransfer) for the offi
 * Python 3.x
 * tensorflow 1.2.1+
 * keras 2.0.x
-* torchfile 
+* ~~torchfile~~ Modified torchfile.py is included that is compatible with Windows 
 * scikit-image
 
 Optionally:

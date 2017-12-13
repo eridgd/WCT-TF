@@ -13,7 +13,7 @@ def vgg_from_t7(t7_file, target_layer=None):
        Adapted from https://github.com/jonrei/tf-AdaIN/blob/master/AdaIN.py
        Converted caffe->t7 from https://github.com/xunhuang1995/AdaIN-style
     '''
-    t7 = torchfile.load(t7_file, force_8bytes_long=False)
+    t7 = torchfile.load(t7_file, force_8bytes_long=True)
     
     inp = Input(shape=(None, None, 3), name='vgg_input')
 
