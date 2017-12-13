@@ -13,8 +13,6 @@ from wct import WCT
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('-src', '--source', dest='video_source', type=int,
-                    default=0, help='Device index of the camera.')
 parser.add_argument('--checkpoints', nargs='+', type=str, help='List of checkpoint directories', required=True)
 parser.add_argument('--relu-targets', nargs='+', type=str, help='List of reluX_1 layers, corresponding to --checkpoints', required=True)
 parser.add_argument('--vgg-path', type=str, help='Path to vgg_normalised.t7', default='models/vgg_normalised.t7')
