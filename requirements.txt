@@ -1,0 +1,4 @@
+keras==2.0.9
+scikit-image
+#tensorflow==1.2.1 # Not added to choose the TF implementaion
+torchfile

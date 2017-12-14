@@ -72,6 +72,32 @@ There are also four keyboard shortcuts:
 
 `stylize.py` will stylize content images and does not require OpenCV. The options are the same as for the webcam script with the addition of `--content-path`, which can be a single image file or folder, and `--out-path` to specify the output folder. Each style in `--style-path` will be applied to each content image. 
 
+## Running with Docker
+
+1. Download VGG19 model: `bash models/download_vgg.sh`
+
+2. Download checkpoints for the five decoders: `bash models/download_models.sh`
+
+3. Obtain style images and save them in a new folder `images` in the repository. Two good sources are the [Wikiart dataset](https://www.kaggle.com/c/painter-by-numbers) and [Describable Textures Dataset](https://www.robots.ox.ac.uk/~vgg/data/dtd/).
+
+4. Install [nvidia-docker](https://github.com/NVIDIA/nvidia-docker).
+
+5. To run the webcam example:
+
+```shell
+nvidia-docker build -t wct-tf . # It will take several minutes.
+xhost +local:root
+nvidia-docker run \
+  -ti \
+  --rm \
+  -v $PWD/models:/usr/src/app/models \
+  -v $PWD/images:/usr/src/app/images \
+  -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
+  -e QT_X11_NO_MITSHM=1 \
+  -e DISPLAY \
+  --device=/dev/video0:/dev/video0 \
+  wct-tf
+```
 
 ## Training
 
