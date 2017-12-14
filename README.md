@@ -72,6 +72,7 @@ There are also four keyboard shortcuts:
 
 `stylize.py` will stylize content images and does not require OpenCV. The options are the same as for the webcam script with the addition of `--content-path`, which can be a single image file or folder, and `--out-path` to specify the output folder. Each style in `--style-path` will be applied to each content image. 
 
+
 ## Running with Docker
 
 1. Download VGG19 model: `bash models/download_vgg.sh`
@@ -119,7 +120,6 @@ nvidia-docker run \
 * `coral.py` implements [CORellation ALignment](https://arxiv.org/abs/1612.01939) to transfer colors from the content image to the style image in order to preserve colors in the stylized output. The default method uses NumPy and there is also a commented out version in PyTorch that is slightly faster.
 * WCT involves two tf.svd ops, which as of TF r1.4 has a GPU implementation. However, this appears to be 2-4x slower than the CPU version and so is explicitly executed on `/cpu:0` in ops.py. [See here](https://github.com/tensorflow/tensorflow/issues/13603) for an interesting discussion of the issue.
 * There is [an open issue](https://github.com/tensorflow/tensorflow/issues/9234) where for some ill-conditioned matrices the CPU version of tf.svd will ungracefully segfault. Adding a small epsilon to the covariance matrices appears to avoid this without visibly affecting the results. If this issue does occur, there is a [commented block](https://github.com/eridgd/WCT-TF/blob/master/ops.py#L55) that uses np.linalg.svd through tf.py_func. This is stable but incurs a 30%+ performance penalty.
-* Windows is now supported thanks to a torchfile compatibility fix by @xdaimon.
 
 
 ## Acknowledgments
@@ -127,6 +127,10 @@ nvidia-docker run \
 Many thanks to the authors Yijun Li & collaborators at UC Merced/Adobe/NVIDIA for their work that inspired this fun project. After building the first version of this TF implementation I discovered their [official Torch implementation](https://github.com/Yijunmaverick/UniversalStyleTransfer) that I referred to in tweaking the WCT op to be more stable.
 
 Thanks also to Xun Huang for the normalized VGG and [Torch version of CORAL](https://github.com/xunhuang1995/AdaIN-style/blob/master/lib/utils.lua).
+
+Windows is now supported thanks to a [torchfile compatibility fix by @xdaimon](https://github.com/bshillingford/python-torchfile/pull/13).
+
+Docker support was graciously [provided by @bryant1410](https://github.com/eridgd/WCT-TF/pull/7).
 
 
 ## TODO
