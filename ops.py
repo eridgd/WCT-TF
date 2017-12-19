@@ -3,6 +3,7 @@ from __future__ import division, print_function
 import tensorflow as tf
 import numpy as np
 from keras.layers import Conv2D, Lambda
+from tensorflow.python.layers import utils
 
 
 ### Layers ###
@@ -66,11 +67,11 @@ def wct_tf(content, style, alpha, eps=1e-8):
     k_s = tf.reduce_sum(tf.cast(tf.greater(Ss, 1e-5), tf.int32))
 
     # Whiten content feature
-    Dc = tf.diag(tf.pow(Sc[:k_c] + eps, -0.5))
+    Dc = tf.diag(tf.pow(Sc[:k_c], -0.5))
     fc_hat = tf.matmul(tf.matmul(tf.matmul(Uc[:,:k_c], Dc), Uc[:,:k_c], transpose_b=True), fc)
 
     # Color content with style
-    Ds = tf.diag(tf.pow(Ss[:k_s] + eps, 0.5))
+    Ds = tf.diag(tf.pow(Ss[:k_s], 0.5))
     fcs_hat = tf.matmul(tf.matmul(tf.matmul(Us[:,:k_s], Ds), Us[:,:k_s], transpose_b=True), fc_hat)
 
     # Re-center with mean of style
@@ -106,9 +107,9 @@ def wct_np(content, style, alpha=0.6, eps=1e-5):
     
     Ec, wc, _ = np.linalg.svd(fcfc)
 
-    Dc_sq_inv = np.linalg.inv(np.sqrt(np.diag(wc+eps)))
+    Dc = np.diag((wc+eps)**-0.5)
 
-    fc_hat = Ec.dot(Dc_sq_inv).dot(Ec.T).dot(fc)
+    fc_hat = Ec.dot(Dc).dot(Ec.T).dot(fc)
 
     ms = style_flat.mean(axis=1, keepdims=True)
     fs = style_flat - ms
@@ -117,9 +118,9 @@ def wct_np(content, style, alpha=0.6, eps=1e-5):
 
     Es, ws, _ = np.linalg.svd(fsfs)
     
-    Ds_sq = np.sqrt(np.diag(ws+eps))
+    Ds = np.sqrt(np.diag(ws+eps))
 
-    fcs_hat = Es.dot(Ds_sq).dot(Es.T).dot(fc_hat)
+    fcs_hat = Es.dot(Ds).dot(Es.T).dot(fc_hat)
 
     fcs_hat = fcs_hat + ms
 
@@ -131,6 +132,167 @@ def wct_np(content, style, alpha=0.6, eps=1e-5):
     # CxHxW -> HxWxC
     blended = np.transpose(blended, (1,2,0))  
     
+    return blended
+
+
+### Style-swap WCT ###
+
+def style_swap(content, style, patch_size, stride):
+    '''TODO try with multiple batches'''
+    content_shape = tf.shape(content)
+
+    # Num channels of input content feature will be same in style-swapped output
+    nC = tf.shape(style)[-1]
+
+    style_patches = tf.extract_image_patches(style, [1,patch_size,patch_size,1], [1,stride,stride,1], [1,1,1,1], 'VALID')
+
+    before_reshape = tf.shape(style_patches)  # NxRowsxColsxPatch_size*Patch_size*nC
+
+    style_patches = tf.reshape(style_patches, [before_reshape[1]*before_reshape[2],patch_size,patch_size,nC])
+    style_patches = tf.transpose(style_patches, [1,2,3,0])
+
+    # style_patches = tf.Print(style_patches, [tf.shape(style_patches)], message="Style patches size", summarize=500)
+
+    # content = tf.Print(content, [tf.shape(content)], message="Content size", summarize=500)
+    # style_patches = tf.Print(style_patches, [tf.shape(style_patches)], summarize=500)
+
+    # Normalize each style patch
+    style_patches_norm = tf.nn.l2_normalize(style_patches, dim=3)
+    # style_patches_norm = tf.Print(style_patches_norm, [tf.shape(style_patches_norm)], message='Style Patches norm filters', summarize=500)
+
+    ss_enc = tf.nn.conv2d(content,
+                          style_patches_norm,
+                          [1,stride,stride,1],
+                          'VALID')
+
+    # ss_enc = tf.Print(ss_enc, [tf.shape(ss_enc)], message='SSConv SIze', summarize=500)
+
+    # For each spatial position find index of max along channel/patch dim  
+    ss_argmax = tf.argmax(ss_enc, axis=3)
+    # ss_argmax = tf.Print(ss_argmax, [ss_argmax], summarize=100)
+    # ss_argmax = tf.Print(ss_argmax, [tf.shape(ss_argmax)], message='Argmax Size', summarize=100)
+    ssC = tf.shape(ss_enc)[-1]  # Num channels in intermediate conv output
+    
+    # One-hot encode argmax with same size as ss_enc, 1's in max channel idx for each spatial pos
+    ss_oh = tf.one_hot(ss_argmax, ssC, 1., 0., 3)
+    # ss_oh = tf.Print(ss_oh, [tf.shape(ss_oh)], message='OH size', summarize=100)
+
+    deconv_out_H = utils.deconv_output_length(tf.shape(ss_oh)[1], patch_size, 'valid', stride)
+    deconv_out_W = utils.deconv_output_length(tf.shape(ss_oh)[2], patch_size, 'valid', stride)
+    # deconv_out_W = tf.Print(deconv_out_W, [deconv_out_H, deconv_out_W], message="deconvH,W", summarize=500)
+    deconv_out_shape = tf.stack([1,deconv_out_H,deconv_out_W,nC])
+    # deconv_out_shape = tf.Print(deconv_out_shape, [deconv_out_shape], message='first deconv_out_shape', summarize=500)
+
+    # Decode back to original size, with highest matching (unnormalized) style patch swapped in content patch loc
+    ss_dec = tf.nn.conv2d_transpose(ss_oh,
+                                    style_patches,
+                                    deconv_out_shape,
+                                    [1,stride,stride,1],
+                                    'VALID')    
+
+    # ss_dec = tf.Print(ss_dec, [tf.shape(ss_dec)], message='ss_dec outsize', summarize=100)
+
+    # Interpolate
+    ss_oh_sum = tf.reduce_sum(ss_oh, axis=3, keep_dims=True)
+    # ss_oh_sum = tf.Print(ss_oh_sum, [ss_oh_sum], message='ss_oh_sum', summarize=100)
+    # ss_oh_sum = tf.Print(ss_oh_sum, [tf.shape(ss_oh_sum)], message='ss_oh_sum shape', summarize=100)
+
+    filter_ones = tf.ones([patch_size,patch_size,1,1], dtype=tf.float32)
+    
+    # Out shape is same spatial size as ss_dec with one channel
+    # out_shape = tf.concat([tf.shape(ss_dec)[:3],[1]], axis=-1)
+    deconv_out_shape = tf.stack([1,deconv_out_H,deconv_out_W,1])
+    # deconv_out_shape = tf.Print(deconv_out_shape, [deconv_out_shape], message='2nd deconv_out_shape', summarize=500)
+    counting = tf.nn.conv2d_transpose(ss_oh_sum,
+                                         filter_ones,
+                                         deconv_out_shape,
+                                         [1,stride,stride,1],
+                                         'VALID')
+    # counting = tf.Print(counting, [counting], summarize=500, message="counting")
+    # counting = tf.Print(counting, [tf.shape(counting)], summarize=500, message="counting shape")
+
+    counting = tf.tile(counting, [1,1,1,nC])
+
+    # counting = tf.Print(counting, [counting], summarize=500, message="counting tiled")
+    # counting = tf.Print(counting, [tf.shape(counting)], summarize=500, message="counting tiled shape")
+
+    interpolated_dec = tf.divide(ss_dec, counting)
+
+    return interpolated_dec
+
+def wct_style_swap(content, style, alpha,
+                   patch_size=3, stride=1, eps=1e-8):
+    print("ALPHA",alpha,"PATCH_SIZE",patch_size,'STRIDE',stride)
+    content_t = tf.transpose(tf.squeeze(content), (2, 0, 1))
+    style_t = tf.transpose(tf.squeeze(style), (2, 0, 1))
+
+    Cc, Hc, Wc = tf.unstack(tf.shape(content_t))
+    Cs, Hs, Ws = tf.unstack(tf.shape(style_t))
+
+    # CxHxW -> CxH*W
+    content_flat = tf.reshape(content_t, (Cc, Hc*Wc))
+    style_flat = tf.reshape(style_t, (Cs, Hs*Ws))
+
+    # Content covariance
+    mc = tf.reduce_mean(content_flat, axis=1, keep_dims=True)
+    fc = content_flat - mc
+    fcfc = tf.matmul(fc, fc, transpose_b=True) / (tf.cast(Hc*Wc, tf.float32) - 1.) + tf.eye(Cc)*eps
+
+    # Style covariance
+    ms = tf.reduce_mean(style_flat, axis=1, keep_dims=True)
+    fs = style_flat - ms
+    fsfs = tf.matmul(fs, fs, transpose_b=True) / (tf.cast(Hs*Ws, tf.float32) - 1.) + tf.eye(Cs)*eps
+
+    # tf.svd is slower on GPU, see https://github.com/tensorflow/tensorflow/issues/13603
+    with tf.device('/cpu:0'):  
+        Sc, Uc, _ = tf.svd(fcfc)
+        Ss, Us, _ = tf.svd(fsfs)
+
+    ## Uncomment to perform SVD for content/style with np in one call
+    ## This is slower than CPU tf.svd but won't segfault for ill-conditioned matrices
+    # def np_svd(content, style):
+    #     '''tf.py_func helper to run SVD with NumPy for content/style cov tensors'''
+    #     Uc, Sc, _ = np.linalg.svd(content)
+    #     Us, Ss, _ = np.linalg.svd(style)
+    #     return Uc, Sc, Us, Ss
+    # Uc, Sc, Us, Ss = tf.py_func(np_svd, [fcfc, fsfs], [tf.float32, tf.float32, tf.float32, tf.float32])
+    
+    k_c = tf.reduce_sum(tf.cast(tf.greater(Sc, 1e-5), tf.int32))
+    k_s = tf.reduce_sum(tf.cast(tf.greater(Ss, 1e-5), tf.int32))
+
+    Dc = tf.diag(tf.pow(Sc[:k_c], -0.5))
+
+    fc_hat = tf.matmul(tf.matmul(tf.matmul(Uc[:,:k_c], Dc), Uc[:,:k_c], transpose_b=True), fc)
+
+    whiten_content = tf.expand_dims(tf.transpose(tf.reshape(fc_hat, [Cc,Hc,Wc]), [1,2,0]), 0)
+
+    # Whiten style feature before swapping
+    Ds = tf.diag(tf.pow(Ss[:k_s], -0.5))
+    whiten_style = tf.matmul(tf.matmul(tf.matmul(Us[:,:k_s], Ds), Us[:,:k_s], transpose_b=True), fs)
+    whiten_style = tf.expand_dims(tf.transpose(tf.reshape(whiten_style, [Cs,Hs,Ws]), [1,2,0]), 0)
+
+    # Style swap
+    # whiten_content = tf.Print(whiten_content, [tf.shape(whiten_content), tf.shape(whiten_style)])
+    ss_feature = style_swap(whiten_content, whiten_style, patch_size, stride)
+
+    # ss_feature = tf.Print(ss_feature, [tf.shape(ss_feature)], message="ss_feature before resize", summarize=500)
+    # HcxWcxCc -> CcxHc*Wc
+    ss_feature = tf.transpose(tf.reshape(ss_feature, [Hc*Wc,Cc]), [1,0])
+    # ss_feature = tf.Print(ss_feature, [tf.shape(ss_feature)], message="ss_feature after resize", summarize=500)
+
+    Ds_sq = tf.diag(tf.pow(Ss[:k_s], 0.5))
+
+    fcs_hat = tf.matmul(tf.matmul(tf.matmul(Us[:,:k_s], Ds_sq), Us[:,:k_s], transpose_b=True), ss_feature)
+
+    fcs_hat = fcs_hat + ms
+
+    blended = alpha * fcs_hat + (1 - alpha) * (fc + mc)
+
+    # CxH*W -> CxHxW
+    blended = tf.reshape(blended, (Cc,Hc,Wc))
+    # CxHxW -> 1xHxWxC
+    blended = tf.expand_dims(tf.transpose(blended, (1,2,0)), 0)
+
     return blended
 
 

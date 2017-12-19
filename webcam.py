@@ -35,9 +35,14 @@ parser.add_argument('--style-size', type=int, help="Resize style image to this s
 parser.add_argument('--crop-size', type=int, help="Crop a square from the style image", default=0)
 parser.add_argument('--alpha', type=float, help="Alpha blend value for WCT features", default=1)
 parser.add_argument('--concat', action='store_true', help="Concatenate style image and stylized output", default=False)
-# parser.add_argument('--interpolate', action='store_true', help="Interpolate between two images", default=False)
 parser.add_argument('--noise', action='store_true', help="Synthesize textures from noise images", default=False)
 parser.add_argument('-r', '--random', type=int, help='Load a random img every # iterations', default=0)
+
+## Style swap args
+parser.add_argument('--swap5', action='store_true', help="Swap style on layer relu5_1", default=False)
+parser.add_argument('--ss-alpha', type=float, help="Style swap alpha blend", default=0.6)
+parser.add_argument('--ss-patch-size', type=int, help="Style swap patch size", default=3)
+parser.add_argument('--ss-stride', type=int, help="Style swap stride", default=1)
 
 args = parser.parse_args()
 
@@ -45,7 +50,7 @@ args = parser.parse_args()
 class StyleWindow(object):
     '''Helper class to handle style image settings'''
 
-    def __init__(self, style_path, img_size=512, crop_size=512, scale=1, alpha=1):
+    def __init__(self, style_path, img_size=512, crop_size=512, scale=1, alpha=1, swap5=False, ss_alpha=1):
         if os.path.isdir(style_path):
             self.style_imgs = get_files(style_path)
         else:
@@ -74,6 +79,11 @@ class StyleWindow(object):
 
         # Scale the content before processing
         cv2.createTrackbar('scale','Style Controls', int(self.scale*100), 200, self.set_scale)
+
+        if swap5:
+            self.ss_alpha = ss_alpha
+            cv2.createTrackbar('style swap alpha','Style Controls', int(self.ss_alpha*100), 100, self.set_ss_alpha)
+
 
         self.set_style(random=True, window='Style Controls')
 
@@ -111,8 +121,11 @@ class StyleWindow(object):
     def show_style(self, window, style_rgb):
         cv2.imshow(window, cv2.cvtColor(cv2.resize(style_rgb, (args.style_size, args.style_size)), cv2.COLOR_RGB2BGR))
 
-    def set_interp(self, weight):
-        self.interp_weight = weight / 100
+    # def set_interp(self, weight):
+    #     self.interp_weight = weight / 100
+
+    def set_ss_alpha(self, ss_alpha):
+        self.ss_alpha = ss_alpha / 100
 
 
 def main():
@@ -120,10 +133,12 @@ def main():
     wct_model = WCT(checkpoints=args.checkpoints, 
                     relu_targets=args.relu_targets,
                     vgg_path=args.vgg_path, 
-                    device=args.device)
+                    device=args.device,
+                    ss_patch_size=args.ss_patch_size, 
+                    ss_stride=args.ss_stride)
 
     # Load a panel to control style settings
-    style_window = StyleWindow(args.style_path, args.style_size, args.crop_size, args.scale, args.alpha)
+    style_window = StyleWindow(args.style_path, args.style_size, args.crop_size, args.scale, args.alpha, args.swap5, args.ss_alpha)
 
     # Start the webcam stream
     cap = WebcamVideoStream(args.video_source, args.width, args.height).start()
@@ -146,7 +161,9 @@ def main():
     
     fps = FPS().start() # Track FPS processing speed
 
+    # Toggles changed with kb shortcuts
     keep_colors = args.keep_colors
+    swap_style = args.swap5
 
     count = 0
 
@@ -173,7 +190,8 @@ def main():
                 style_rgb = style_window.style_rgb
 
             # Run the frame through the style network
-            stylized_rgb = wct_model.predict(content_rgb, style_rgb, style_window.alpha)
+            stylized_rgb = wct_model.predict(content_rgb, style_rgb, style_window.alpha,
+                                             swap_style, style_window.ss_alpha)
 
             if args.passes > 1:
                 for i in range(args.passes-1):
@@ -201,7 +219,10 @@ def main():
             elif key & 0xFF == ord('c'): # Toggle color preservation
                 keep_colors = not keep_colors
                 print('Switching to keep_colors',keep_colors)
-            elif key & 0xFF == ord('s'): # Save stylized frame
+            elif key & 0xFF == ord('s'): # Toggle color preservation
+                swap_style = not swap_style
+                print('New value for flag swap_style:',swap_style)
+            elif key & 0xFF == ord('w'): # Write stylized frame
                 out_f = "{}.png".format(time.time())
                 save_img(out_f, stylized_rgb)
                 print('Saved image to',out_f)

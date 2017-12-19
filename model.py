@@ -6,7 +6,7 @@ from vgg_normalised import vgg_from_t7
 from keras import backend as K
 from keras.models import Model
 from keras.layers import Input, UpSampling2D, Lambda
-from ops import pad_reflect, Conv2DReflect, torch_decay, wct_tf
+from ops import pad_reflect, Conv2DReflect, torch_decay, wct_tf, wct_style_swap
 from collections import namedtuple
 
 
@@ -30,7 +30,8 @@ EncoderDecoder = namedtuple('EncoderDecoder',
 class WCTModel(object):
     '''Model graph for Universal Style Transfer via Feature Transforms from https://arxiv.org/abs/1705.08086'''
 
-    def __init__(self, mode='train', relu_targets=['relu5_1','relu4_1','relu3_1','relu2_1','relu1_1'], vgg_path=None,  *args, **kwargs):
+    def __init__(self, mode='train', relu_targets=['relu5_1','relu4_1','relu3_1','relu2_1','relu1_1'], vgg_path=None,  
+                 *args, **kwargs):
         '''
             Args:
                 mode: 'train' or 'test'. If 'train' then training & summary ops will be added to the graph
@@ -45,7 +46,11 @@ class WCTModel(object):
         self.apply_wct = tf.placeholder_with_default(tf.constant(False), shape=[])
 
         self.alpha = tf.placeholder_with_default(1., shape=[], name='alpha')
-
+        
+        # Style swap settings
+        self.swap5 = tf.placeholder_with_default(tf.constant(False), shape=[])
+        self.ss_alpha = tf.placeholder_with_default(.7, shape=[], name='ss_alpha')
+        
         self.encoder_decoders = []
         
         ### Build the graph ###
@@ -97,7 +102,9 @@ class WCTModel(object):
                     pixel_weight=1,
                     tv_weight=0,
                     learning_rate=1e-4,
-                    lr_decay=5e-5):
+                    lr_decay=5e-5,
+                    ss_patch_size=3,
+                    ss_stride=1):
         '''Build the EncoderDecoder architecture for a given relu layer.
 
             Args:
@@ -133,10 +140,20 @@ class WCTModel(object):
  
             ### Build style encoder & WCT if test mode
             if self.mode != 'train':                
-                # Apply WCT if flag is set to true. Otherwise, pass content_encoded along unchanged.
+                # CHANGEME Apply WCT if flag is set to true. Otherwise, pass content_encoded along unchanged.
                 with tf.name_scope('wct_'+relu_target):
-                    decoder_input = tf.cond(self.apply_wct, lambda: wct_tf(content_encoded, style_encoded_tensor, self.alpha), lambda: content_encoded)
-            else:
+                    if relu_target == 'relu5_1':
+                        decoder_input = tf.cond(self.swap5, 
+                                                lambda: wct_style_swap(content_encoded,
+                                                                       style_encoded_tensor,
+                                                                       self.ss_alpha,
+                                                                       ss_patch_size, 
+                                                                       ss_stride), 
+                                                lambda: wct_tf(content_encoded, style_encoded_tensor, self.alpha))
+                    else:
+                        decoder_input = wct_tf(content_encoded, style_encoded_tensor, self.alpha)
+                    
+            else: # In train mode we're trying to reconstruct from the encoding, so pass along unchanged
                 decoder_input = content_encoded
 
             ### Build decoder

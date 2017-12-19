@@ -12,7 +12,8 @@ from coral import coral_numpy
 class WCT(object):
     '''Styilze images with trained WCT model'''
 
-    def __init__(self, checkpoints, relu_targets, vgg_path, device='/gpu:0'): 
+    def __init__(self, checkpoints, relu_targets, vgg_path, device='/gpu:0',
+                 ss_patch_size=3, ss_stride=1): 
         '''
             Args:
                 checkpoints: List of trained decoder model checkpoint dirs
@@ -24,7 +25,8 @@ class WCT(object):
 
         with graph.device(device):
             # Build the graph
-            self.model = WCTModel(mode='test', relu_targets=relu_targets, vgg_path=vgg_path)
+            self.model = WCTModel(mode='test', relu_targets=relu_targets, vgg_path=vgg_path,
+                                  ss_patch_size=ss_patch_size, ss_stride=ss_stride)
             
             self.content_input = self.model.content_input
             self.decoded_output = self.model.decoded_output
@@ -60,7 +62,8 @@ class WCT(object):
     def postprocess(image):
         return np.uint8(np.clip(image, 0, 1) * 255)
 
-    def predict(self, content, style, alpha=1):
+    def predict(self, content, style, alpha=1,
+                swap5=False, ss_alpha=1., ss_patch_size=3, ss_stride=1):
         '''Stylize a single content/style pair
            Assumes that images are RGB [0,255]
         '''
@@ -71,8 +74,10 @@ class WCT(object):
         stylized = self.sess.run(self.decoded_output, feed_dict={
                                                           self.content_input: content,
                                                           self.model.style_input: style,
-                                                          self.model.apply_wct: True,
-                                                          self.model.alpha: alpha})
+                                                          # self.model.apply_wct: True,
+                                                          self.model.alpha: alpha,
+                                                          self.model.swap5: swap5,
+                                                          self.model.ss_alpha: ss_alpha})
         print(time.time() - s)
 
         return self.postprocess(stylized[0])
