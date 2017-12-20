@@ -37,6 +37,20 @@ def center_crop(img, size=256):
     w_off = (width - size) // 2
     return img[h_off:h_off+size,w_off:w_off+size]
 
+def center_crop_to(img, H_target, W_target):
+    height, width = img.shape[0], img.shape[1]
+
+    if height < H_target or width < W_target:
+        H_rat, W_rat = H_target / height, W_target / width
+        rat = float(max(H_rat, W_rat))
+
+        img = scipy.misc.imresize(img, rat, interp='bilinear')
+        height, width = img.shape[0], img.shape[1]
+
+    h_off = (height - H_target) // 2
+    w_off = (width - W_target) // 2
+    return img[h_off:h_off+H_target,w_off:w_off+W_target]
+
 def resize_to(img, resize=512):
     '''Resize short side to target size and preserve aspect ratio'''
     height, width = img.shape[0], img.shape[1]
@@ -96,3 +110,24 @@ def preserve_colors_np(style_rgb, content_rgb):
 #     content_bgr = cv2.cvtColor(content_rgb, cv2.COLOR_RGB2BGR)
 #     transferred = color_transfer(content_bgr, style_bgr)
 #     return cv2.cvtColor(transferred, cv2.COLOR_BGR2RGB)
+
+def swap_filter_fit(H, W, patch_size, stride, n_pools=4):
+    '''Calculate '''
+    pool_out_size = lambda x: (x + 2 - 1) // 2    
+    H_pool_out, W_pool_out = H, W
+    for _ in range(n_pools):
+        H_pool_out, W_pool_out = pool_out_size(H_pool_out), pool_out_size(W_pool_out)
+    
+    H_conv_out = (H_pool_out - patch_size) // stride + 1
+    W_conv_out = (W_pool_out - patch_size) // stride + 1
+
+    H_deconv_out = (H_conv_out - 1) * stride + patch_size
+    W_deconv_out = (W_conv_out - 1) * stride + patch_size
+
+    H_out = H_deconv_out * 2**n_pools
+    W_out = W_deconv_out * 2**n_pools
+
+    should_refit = H_pool_out != H_deconv_out or W_pool_out != W_deconv_out
+
+    return should_refit, H_out, W_out
+     

@@ -29,6 +29,12 @@ parser.add_argument('-r','--random', type=int, help="Choose # of random subset o
 parser.add_argument('--alpha', type=float, help="Alpha blend value", default=1)
 parser.add_argument('--concat', action='store_true', help="Concatenate style image and stylized output", default=False)
 
+## Style swap args
+parser.add_argument('--swap5', action='store_true', help="Swap style on layer relu5_1", default=False)
+parser.add_argument('--ss-alpha', type=float, help="Style swap alpha blend", default=0.6)
+parser.add_argument('--ss-patch-size', type=int, help="Style swap patch size", default=3)
+parser.add_argument('--ss-stride', type=int, help="Style swap stride", default=1)
+
 args = parser.parse_args()
 
 
@@ -39,7 +45,9 @@ def main():
     wct_model = WCT(checkpoints=args.checkpoints, 
                                 relu_targets=args.relu_targets,
                                 vgg_path=args.vgg_path, 
-                                device=args.device)
+                                device=args.device,
+                                ss_patch_size=args.ss_patch_size, 
+                                ss_stride=args.ss_stride)
 
     # Get content & style full paths
     if os.path.isdir(args.content_path):
@@ -65,7 +73,8 @@ def main():
         content_img = get_img(content_fullpath)
         if args.content_size > 0:
             content_img = resize_to(content_img, args.content_size)
-
+        import random
+        random.shuffle(style_files)
         for style_fullpath in style_files: 
             style_prefix, _ = os.path.splitext(style_fullpath)
             style_prefix = os.path.basename(style_prefix)  # Extract filename prefix without ext
@@ -88,7 +97,8 @@ def main():
             #     frame_resize = gaussian_filter(frame_resize, sigma=0.5)
 
             # Run the frame through the style network
-            stylized_rgb = wct_model.predict(content_img, style_img, args.alpha)
+            stylized_rgb = wct_model.predict(content_img, style_img, args.alpha,
+                                             args.swap5, args.ss_alpha)
             # stylized_rgb = wct_model.predict_np(content_img, style_img, args.alpha) # Numpy version
 
             if args.passes > 1:

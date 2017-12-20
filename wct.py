@@ -7,6 +7,8 @@ from model import WCTModel
 import tensorflow as tf
 from ops import wct_np
 from coral import coral_numpy
+import scipy.misc
+from utils import swap_filter_fit, center_crop_to
 
 
 class WCT(object):
@@ -21,12 +23,15 @@ class WCT(object):
                 vgg_path: Normalised VGG19 .t7 path
                 device: String for device ID to load model onto
         '''       
+        self.ss_patch_size = ss_patch_size
+        self.ss_stride = ss_stride
+
         graph = tf.get_default_graph()
 
         with graph.device(device):
             # Build the graph
             self.model = WCTModel(mode='test', relu_targets=relu_targets, vgg_path=vgg_path,
-                                  ss_patch_size=ss_patch_size, ss_stride=ss_stride)
+                                  ss_patch_size=self.ss_patch_size, ss_stride=self.ss_stride)
             
             self.content_input = self.model.content_input
             self.decoded_output = self.model.decoded_output
@@ -63,10 +68,20 @@ class WCT(object):
         return np.uint8(np.clip(image, 0, 1) * 255)
 
     def predict(self, content, style, alpha=1,
-                swap5=False, ss_alpha=1., ss_patch_size=3, ss_stride=1):
+                swap5=False, ss_alpha=1):
         '''Stylize a single content/style pair
            Assumes that images are RGB [0,255]
         '''
+        if swap5 is True and self.ss_stride != 1:
+            # If stride > 1 the content might need to be resized for the filter to fit
+            old_H, old_W = content.shape[:2]
+
+            should_refit, H, W = swap_filter_fit(old_H, old_W, self.ss_patch_size, self.ss_stride)
+            print(should_refit, H, W)
+
+            if should_refit:
+                content = center_crop_to(content, H, W)
+
         content = self.preprocess(content)
         style   = self.preprocess(style)
 
