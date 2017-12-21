@@ -38,11 +38,12 @@ def center_crop(img, size=256):
     return img[h_off:h_off+size,w_off:w_off+size]
 
 def center_crop_to(img, H_target, W_target):
+    '''Center crop a rectangle of given dimensions and resize if necessary'''
     height, width = img.shape[0], img.shape[1]
 
     if height < H_target or width < W_target:
         H_rat, W_rat = H_target / height, W_target / width
-        rat = float(max(H_rat, W_rat))
+        rat = max(H_rat, W_rat)
 
         img = scipy.misc.imresize(img, rat, interp='bilinear')
         height, width = img.shape[0], img.shape[1]
@@ -83,6 +84,11 @@ def get_img_random_crop(src, resize=512, crop=256):
 
     return img
 
+def preserve_colors_np(style_rgb, content_rgb):
+    coraled = coral_numpy(style_rgb/255., content_rgb/255.)
+    coraled = np.uint8(np.clip(coraled, 0, 1) * 255.)
+    return coraled
+
 # def preserve_colors(content_rgb, styled_rgb):
 #     """Extract luminance from styled image and apply colors from content"""
 #     if content_rgb.shape != styled_rgb.shape:
@@ -94,11 +100,6 @@ def get_img_random_crop(src, resize=512, crop=256):
 #     Y_i, U_i, V_i = cv2.split(image_YUV)
 #     styled_rgb = cv2.cvtColor(np.stack([Y_s, U_i, V_i], axis=-1), cv2.COLOR_YUV2RGB)
 #     return styled_rgb
-
-def preserve_colors_np(style_rgb, content_rgb):
-    coraled = coral_numpy(style_rgb/255., content_rgb/255.)
-    coraled = np.uint8(np.clip(coraled, 0, 1) * 255.)
-    return coraled
 
 # def preserve_colors_pytorch(style_rgb, content_rgb):
 #     coraled = coral_pytorch(style_rgb/255., content_rgb/255.)
@@ -112,22 +113,26 @@ def preserve_colors_np(style_rgb, content_rgb):
 #     return cv2.cvtColor(transferred, cv2.COLOR_BGR2RGB)
 
 def swap_filter_fit(H, W, patch_size, stride, n_pools=4):
-    '''Calculate '''
+    '''Style swap may not output same size encoding if filter size > 1, calculate a new size to avoid this'''
+    # Calculate size of encodings after max pooling n_pools times
     pool_out_size = lambda x: (x + 2 - 1) // 2    
     H_pool_out, W_pool_out = H, W
     for _ in range(n_pools):
         H_pool_out, W_pool_out = pool_out_size(H_pool_out), pool_out_size(W_pool_out)
     
+    # Size of encoding after applying conv to determine nearest neighbor patches
     H_conv_out = (H_pool_out - patch_size) // stride + 1
     W_conv_out = (W_pool_out - patch_size) // stride + 1
 
+    # Size after transposed conv
     H_deconv_out = (H_conv_out - 1) * stride + patch_size
     W_deconv_out = (W_conv_out - 1) * stride + patch_size
 
+    # Stylized output size after decoding
     H_out = H_deconv_out * 2**n_pools
     W_out = W_deconv_out * 2**n_pools
 
-    should_refit = H_pool_out != H_deconv_out or W_pool_out != W_deconv_out
+    # Image will need to be resized/cropped if pooled encoding does not match style-swap encoding in either dim
+    should_refit = (H_pool_out != H_deconv_out) or (W_pool_out != W_deconv_out)
 
     return should_refit, H_out, W_out
-     

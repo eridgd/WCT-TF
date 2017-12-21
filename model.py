@@ -42,9 +42,6 @@ class WCTModel(object):
 
         self.style_input = tf.placeholder_with_default(tf.constant([[[[0.,0.,0.]]]]), shape=(None, None, None, 3), name='style_img')
 
-        # Flag for applying WCT, should only be True for test mode. Setting to False will pass through content encoding.
-        self.apply_wct = tf.placeholder_with_default(tf.constant(False), shape=[])
-
         self.alpha = tf.placeholder_with_default(1., shape=[], name='alpha')
         
         # Style swap settings
@@ -140,9 +137,9 @@ class WCTModel(object):
  
             ### Build style encoder & WCT if test mode
             if self.mode != 'train':                
-                # CHANGEME Apply WCT if flag is set to true. Otherwise, pass content_encoded along unchanged.
                 with tf.name_scope('wct_'+relu_target):
                     if relu_target == 'relu5_1':
+                        # Apply style swap on relu5_1 encodings if self.swap5 flag is set. Otherwise perform WCT.
                         decoder_input = tf.cond(self.swap5, 
                                                 lambda: wct_style_swap(content_encoded,
                                                                        style_encoded_tensor,

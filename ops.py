@@ -137,88 +137,10 @@ def wct_np(content, style, alpha=0.6, eps=1e-5):
 
 ### Style-swap WCT ###
 
-def style_swap(content, style, patch_size, stride):
-    # Num channels of input content feature will be same in style-swapped output
-    nC = tf.shape(style)[-1]
-
-    style_patches = tf.extract_image_patches(style, [1,patch_size,patch_size,1], [1,stride,stride,1], [1,1,1,1], 'VALID')
-
-    before_reshape = tf.shape(style_patches)  # NxRowsxColsxPatch_size*Patch_size*nC
-
-    style_patches = tf.reshape(style_patches, [before_reshape[1]*before_reshape[2],patch_size,patch_size,nC])
-    style_patches = tf.transpose(style_patches, [1,2,3,0])
-
-    style_patches = tf.Print(style_patches, [tf.shape(style_patches)], message="Style patches size", summarize=500)
-
-    content = tf.Print(content, [tf.shape(content)], message="Content size", summarize=500)
-    style_patches = tf.Print(style_patches, [tf.shape(style_patches)], summarize=500)
-
-    # Normalize each style patch
-    style_patches_norm = tf.nn.l2_normalize(style_patches, dim=3)
-    style_patches_norm = tf.Print(style_patches_norm, [tf.shape(style_patches_norm)], message='Style Patches norm filters', summarize=500)
-
-    ss_enc = tf.nn.conv2d(content,
-                          style_patches_norm,
-                          [1,stride,stride,1],
-                          'VALID')
-
-    ss_enc = tf.Print(ss_enc, [tf.shape(ss_enc)], message='SSConv SIze', summarize=500)
-
-    # For each spatial position find index of max along channel/patch dim  
-    ss_argmax = tf.argmax(ss_enc, axis=3)
-    ss_argmax = tf.Print(ss_argmax, [ss_argmax], summarize=100)
-    ss_argmax = tf.Print(ss_argmax, [tf.shape(ss_argmax)], message='Argmax Size', summarize=100)
-    ssC = tf.shape(ss_enc)[-1]  # Num channels in intermediate conv output
-    
-    # One-hot encode argmax with same size as ss_enc, 1's in max channel idx for each spatial pos
-    ss_oh = tf.one_hot(ss_argmax, ssC, 1., 0., 3)
-    ss_oh = tf.Print(ss_oh, [tf.shape(ss_oh)], message='OH size', summarize=100)
-
-    deconv_out_H = utils.deconv_output_length(tf.shape(ss_oh)[1], patch_size, 'valid', stride)
-    deconv_out_W = utils.deconv_output_length(tf.shape(ss_oh)[2], patch_size, 'valid', stride)
-    deconv_out_W = tf.Print(deconv_out_W, [deconv_out_H, deconv_out_W], message="deconvH,W", summarize=500)
-    deconv_out_shape = tf.stack([1,deconv_out_H,deconv_out_W,nC])
-    deconv_out_shape = tf.Print(deconv_out_shape, [deconv_out_shape], message='first deconv_out_shape', summarize=500)
-
-    # Decode back to original size, with highest matching (unnormalized) style patch swapped in content patch loc
-    ss_dec = tf.nn.conv2d_transpose(ss_oh,
-                                    style_patches,
-                                    deconv_out_shape,
-                                    [1,stride,stride,1],
-                                    'VALID')    
-
-    ss_dec = tf.Print(ss_dec, [tf.shape(ss_dec)], message='ss_dec outsize', summarize=100)
-
-    # Interpolate
-    ss_oh_sum = tf.reduce_sum(ss_oh, axis=3, keep_dims=True)
-    ss_oh_sum = tf.Print(ss_oh_sum, [ss_oh_sum], message='ss_oh_sum', summarize=100)
-    ss_oh_sum = tf.Print(ss_oh_sum, [tf.shape(ss_oh_sum)], message='ss_oh_sum shape', summarize=100)
-
-    filter_ones = tf.ones([patch_size,patch_size,1,1], dtype=tf.float32)
-    
-    # Out shape is same spatial size as ss_dec with one channel
-    # out_shape = tf.concat([tf.shape(ss_dec)[:3],[1]], axis=-1)
-    deconv_out_shape = tf.stack([1,deconv_out_H,deconv_out_W,1])
-    deconv_out_shape = tf.Print(deconv_out_shape, [deconv_out_shape], message='2nd deconv_out_shape', summarize=500)
-    counting = tf.nn.conv2d_transpose(ss_oh_sum,
-                                         filter_ones,
-                                         deconv_out_shape,
-                                         [1,stride,stride,1],
-                                         'VALID')
-    counting = tf.Print(counting, [counting], summarize=500, message="counting")
-    counting = tf.Print(counting, [tf.shape(counting)], summarize=500, message="counting shape")
-
-    counting = tf.tile(counting, [1,1,1,nC])
-
-    counting = tf.Print(counting, [counting], summarize=500, message="counting tiled")
-    counting = tf.Print(counting, [tf.shape(counting)], summarize=500, message="counting tiled shape")
-
-    interpolated_dec = tf.divide(ss_dec, counting)
-
-    return interpolated_dec
-
-def wct_style_swap(content, style, alpha,
-                   patch_size=3, stride=1, eps=1e-8):
+def wct_style_swap(content, style, alpha, patch_size=3, stride=1, eps=1e-8):
+    '''Modified Whiten-Color Transform that performs style swap on whitened encodings before coloring
+       Assume that content/style encodings have shape 1xHxWxC
+    '''
     content_t = tf.transpose(tf.squeeze(content), (2, 0, 1))
     style_t = tf.transpose(tf.squeeze(style), (2, 0, 1))
 
@@ -270,14 +192,11 @@ def wct_style_swap(content, style, alpha,
     # Reshape before passing to style swap, CxH*W -> 1xHxWxC
     whiten_style = tf.expand_dims(tf.transpose(tf.reshape(whiten_style, [Cs,Hs,Ws]), [1,2,0]), 0)
 
-    # Style swap
-    whiten_content = tf.Print(whiten_content, [tf.shape(whiten_content), tf.shape(whiten_style)])
+    # Style swap whitened encodings
     ss_feature = style_swap(whiten_content, whiten_style, patch_size, stride)
 
-    ss_feature = tf.Print(ss_feature, [tf.shape(ss_feature)], message="ss_feature before resize", summarize=500)
-    # HcxWcxCc -> CcxHc*Wc
+    # HxWxC -> CxH*W
     ss_feature = tf.transpose(tf.reshape(ss_feature, [Hc*Wc,Cc]), [1,0])
-    ss_feature = tf.Print(ss_feature, [tf.shape(ss_feature)], message="ss_feature after resize", summarize=500)
 
     Ds_sq = tf.diag(tf.pow(Ss[:k_s], 0.5))
 
@@ -293,6 +212,86 @@ def wct_style_swap(content, style, alpha,
     blended = tf.expand_dims(tf.transpose(blended, (1,2,0)), 0)
 
     return blended
+
+def style_swap(content, style, patch_size, stride):
+    # Num channels of input content feature will be same in style-swapped output
+    nC = tf.shape(style)[-1]
+
+    style_patches = tf.extract_image_patches(style, [1,patch_size,patch_size,1], [1,stride,stride,1], [1,1,1,1], 'VALID')
+
+    before_reshape = tf.shape(style_patches)  # NxRowsxColsxPatch_size*Patch_size*nC
+
+    style_patches = tf.reshape(style_patches, [before_reshape[1]*before_reshape[2],patch_size,patch_size,nC])
+    style_patches = tf.transpose(style_patches, [1,2,3,0])
+
+    # style_patches = tf.Print(style_patches, [tf.shape(style_patches)], message="Style patches size", summarize=500)
+
+    # content = tf.Print(content, [tf.shape(content)], message="Content size", summarize=500)
+    # style_patches = tf.Print(style_patches, [tf.shape(style_patches)], summarize=500)
+
+    # Normalize each style patch
+    style_patches_norm = tf.nn.l2_normalize(style_patches, dim=3)
+    # style_patches_norm = tf.Print(style_patches_norm, [tf.shape(style_patches_norm)], message='Style Patches norm filters', summarize=500)
+
+    ss_enc = tf.nn.conv2d(content,
+                          style_patches_norm,
+                          [1,stride,stride,1],
+                          'VALID')
+
+    # ss_enc = tf.Print(ss_enc, [tf.shape(ss_enc)], message='SSConv SIze', summarize=500)
+
+    # For each spatial position find index of max along channel/patch dim  
+    ss_argmax = tf.argmax(ss_enc, axis=3)
+    # ss_argmax = tf.Print(ss_argmax, [ss_argmax], summarize=100)
+    # ss_argmax = tf.Print(ss_argmax, [tf.shape(ss_argmax)], message='Argmax Size', summarize=100)
+    ssC = tf.shape(ss_enc)[-1]  # Num channels in intermediate conv output
+    
+    # One-hot encode argmax with same size as ss_enc, 1's in max channel idx for each spatial pos
+    ss_oh = tf.one_hot(ss_argmax, ssC, 1., 0., 3)
+    # ss_oh = tf.Print(ss_oh, [tf.shape(ss_oh)], message='OH size', summarize=100)
+
+    deconv_out_H = utils.deconv_output_length(tf.shape(ss_oh)[1], patch_size, 'valid', stride)
+    deconv_out_W = utils.deconv_output_length(tf.shape(ss_oh)[2], patch_size, 'valid', stride)
+    # deconv_out_W = tf.Print(deconv_out_W, [deconv_out_H, deconv_out_W], message="deconvH,W", summarize=500)
+    deconv_out_shape = tf.stack([1,deconv_out_H,deconv_out_W,nC])
+    # deconv_out_shape = tf.Print(deconv_out_shape, [deconv_out_shape], message='first deconv_out_shape', summarize=500)
+
+    # Decode back to original size, with highest matching (unnormalized) style patch swapped in content patch loc
+    ss_dec = tf.nn.conv2d_transpose(ss_oh,
+                                    style_patches,
+                                    deconv_out_shape,
+                                    [1,stride,stride,1],
+                                    'VALID')    
+
+    # ss_dec = tf.Print(ss_dec, [tf.shape(ss_dec)], message='ss_dec outsize', summarize=100)
+
+    # Interpolate
+    ss_oh_sum = tf.reduce_sum(ss_oh, axis=3, keep_dims=True)
+    # ss_oh_sum = tf.Print(ss_oh_sum, [ss_oh_sum], message='ss_oh_sum', summarize=100)
+    # ss_oh_sum = tf.Print(ss_oh_sum, [tf.shape(ss_oh_sum)], message='ss_oh_sum shape', summarize=100)
+
+    filter_ones = tf.ones([patch_size,patch_size,1,1], dtype=tf.float32)
+    
+    # Out shape is same spatial size as ss_dec with one channel
+    # out_shape = tf.concat([tf.shape(ss_dec)[:3],[1]], axis=-1)
+    deconv_out_shape = tf.stack([1,deconv_out_H,deconv_out_W,1])
+    # deconv_out_shape = tf.Print(deconv_out_shape, [deconv_out_shape], message='2nd deconv_out_shape', summarize=500)
+    counting = tf.nn.conv2d_transpose(ss_oh_sum,
+                                         filter_ones,
+                                         deconv_out_shape,
+                                         [1,stride,stride,1],
+                                         'VALID')
+    # counting = tf.Print(counting, [counting], summarize=500, message="counting")
+    # counting = tf.Print(counting, [tf.shape(counting)], summarize=500, message="counting shape")
+
+    counting = tf.tile(counting, [1,1,1,nC])
+
+    # counting = tf.Print(counting, [counting], summarize=500, message="counting tiled")
+    # counting = tf.Print(counting, [tf.shape(counting)], summarize=500, message="counting tiled shape")
+
+    interpolated_dec = tf.divide(ss_dec, counting)
+
+    return interpolated_dec
 
 
 ### Misc ###

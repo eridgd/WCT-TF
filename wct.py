@@ -67,21 +67,28 @@ class WCT(object):
     def postprocess(image):
         return np.uint8(np.clip(image, 0, 1) * 255)
 
-    def predict(self, content, style, alpha=1,
-                swap5=False, ss_alpha=1):
-        '''Stylize a single content/style pair
-           Assumes that images are RGB [0,255]
+    def predict(self, content, style, alpha=1, swap5=False, ss_alpha=1):
+        '''Stylize a single content/style pair.
+
+           Args:
+               content: Array for content image in [0,255]
+               style: Array for style image in [0,255]
+               alpha: Float blending value for WCT op in [0,1]
+               swap5: If True perform style swap at layer relu5_1 instead of WCT
+               ss_alpha: [0,1] Float blending value for style-swapped feature & content feature
+           Returns:
+               Stylized image with pixels in [0,255]
         '''
+        # If doing style swap and stride > 1 the content might need to be resized for the filter to fit
         if swap5 is True and self.ss_stride != 1:
-            # If stride > 1 the content might need to be resized for the filter to fit
             old_H, old_W = content.shape[:2]
 
             should_refit, H, W = swap_filter_fit(old_H, old_W, self.ss_patch_size, self.ss_stride)
-            print(should_refit, H, W)
 
             if should_refit:
                 content = center_crop_to(content, H, W)
 
+        # Make sure shape is correct and pixels are in [0,1]
         content = self.preprocess(content)
         style   = self.preprocess(style)
 
@@ -89,67 +96,9 @@ class WCT(object):
         stylized = self.sess.run(self.decoded_output, feed_dict={
                                                           self.content_input: content,
                                                           self.model.style_input: style,
-                                                          # self.model.apply_wct: True,
                                                           self.model.alpha: alpha,
                                                           self.model.swap5: swap5,
                                                           self.model.ss_alpha: ss_alpha})
-        print(time.time() - s)
+        print("Stylized in:",time.time() - s)
 
         return self.postprocess(stylized[0])
-
-    # def predict_np(self, content, style, alpha=1):
-    #     '''Stylize a single content/style pair with numpy WCT
-    #        Assumes that images are RGB [0,255]
-    #     '''
-    #     content = self.preprocess(content)
-    #     style   = self.preprocess(style)
-
-    #     # if self.style_encoded is None:
-    #     style_encoded = self.sess.run(self.model.style_encoded, feed_dict={self.model.style_input: style,
-    #                                                                        self.model.compute_style: True,
-    #                                                                        self.model.compute_content: False})
-
-        
-    #     s = time.time()
-    #     # print("style")
-    #     # print(style_encoded)
-    #     content_encoded = self.sess.run(self.encoded, feed_dict={self.model.content_input: content,
-    #                                                              self.model.compute_content: True})
-    #     # print("content")
-    #     # print(content_encoded)
-    #     encoded_wct = wct_np(content_encoded.squeeze(), style_encoded.squeeze(), alpha)
-    #     # print("wct")
-    #     # print(encoded_wct)
-
-    #     stylized = self.sess.run(self.decoded, feed_dict={self.model.decoder_input: np.expand_dims(encoded_wct, 0)})
-    #     # stylized = self.sess.run(self.decoded, feed_dict={
-    #     #                                                   self.content_input: content,
-    #     #                                                   self.model.style_img: style,
-    #     #                                                   self.model.compute_content: True,
-    #     #                                                   self.model.compute_style: True,
-    #     #                                                   self.model.apply_wct: True,
-    #     #                                                   self.model.alpha: alpha})
-    #     print(time.time() - s)
-        
-
-    #     return self.postprocess(stylized[0])
-
-    # def predict_interpolate(self, content, styles, style_weights, alpha=1):
-    #     '''Stylize a weighted sum of multiple style encodings for a single content'''
-    #     content_stacked = np.stack([content]*len(styles))  # Repeat content for each style
-    #     style_stacked = np.stack(styles)
-    #     content_stacked = self.preprocess(content_stacked)
-    #     style_stacked = self.preprocess(style_stacked)
-
-    #     encoded = self.sess.run(self.model.wct_encoded, feed_dict={self.content_input: content_stacked,
-    #                                                                  self.style_imgs:   style_stacked,
-    #                                                                  self.alpha_tensor: alpha})
-
-    #     # Weight & combine WCT transformed encodings
-    #     style_weights = np.array(style_weights).reshape((-1, 1, 1, 1))
-    #     encoded_weighted = encoded * style_weights
-    #     encoded_interpolated = np.sum(encoded_weighted, axis=0, keepdims=True)
-
-    #     stylized = self.sess.run(self.stylized, feed_dict={self.model.wct_encoded_pl: encoded_interpolated})
-
-    #     return self.postprocess(stylized[0])

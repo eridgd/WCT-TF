@@ -71,7 +71,7 @@ class StyleWindow(object):
             cv2.createTrackbar('index','Style Controls', 0, len(self.style_imgs)-1, self.set_idx)
         
         # Blend param for WCT transform
-        cv2.createTrackbar('alpha','Style Controls', int(self.alpha*100), 100, self.set_alpha)
+        cv2.createTrackbar('WCT alpha','Style Controls', int(self.alpha*100), 100, self.set_alpha)
 
         # Resize style to this size before cropping
         cv2.createTrackbar('size','Style Controls', self.img_size, 1280, self.set_size)
@@ -223,14 +223,14 @@ def main():
                 style_window.set_style(random=True)
             elif key & 0xFF == ord('c'): # Toggle color preservation
                 keep_colors = not keep_colors
-                print('Switching to keep_colors',keep_colors)
-            elif key & 0xFF == ord('s'): # Toggle color preservation
+                print('Switching to keep_colors:',keep_colors)
+            elif key & 0xFF == ord('s'): # Toggle style swap
                 swap_style = not swap_style
                 print('New value for flag swap_style:',swap_style)
             elif key & 0xFF == ord('w'): # Write stylized frame
                 out_f = "{}.png".format(time.time())
                 save_img(out_f, stylized_rgb)
-                print('Saved image to',out_f)
+                print('Saved image to:',out_f)
             elif key & 0xFF == ord('q'): # Quit gracefully
                 break
         else:

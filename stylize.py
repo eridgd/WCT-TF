@@ -73,8 +73,7 @@ def main():
         content_img = get_img(content_fullpath)
         if args.content_size > 0:
             content_img = resize_to(content_img, args.content_size)
-        import random
-        random.shuffle(style_files)
+        
         for style_fullpath in style_files: 
             style_prefix, _ = os.path.splitext(style_fullpath)
             style_prefix = os.path.basename(style_prefix)  # Extract filename prefix without ext
@@ -99,7 +98,6 @@ def main():
             # Run the frame through the style network
             stylized_rgb = wct_model.predict(content_img, style_img, args.alpha,
                                              args.swap5, args.ss_alpha)
-            # stylized_rgb = wct_model.predict_np(content_img, style_img, args.alpha) # Numpy version
 
             if args.passes > 1:
                 for _ in range(args.passes-1):
