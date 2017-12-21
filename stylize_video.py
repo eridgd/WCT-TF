@@ -32,6 +32,12 @@ parser.add_argument('--device', type=str, help='Device to perform compute on, e.
 parser.add_argument('--alpha', type=float, help="Alpha blend value", default=1)
 parser.add_argument('--concat', action='store_true', help="Concatenate style image and stylized output", default=False)
 
+## Style swap args
+parser.add_argument('--swap5', action='store_true', help="Swap style on layer relu5_1", default=False)
+parser.add_argument('--ss-alpha', type=float, help="Style swap alpha blend", default=0.6)
+parser.add_argument('--ss-patch-size', type=int, help="Style swap patch size", default=3)
+parser.add_argument('--ss-stride', type=int, help="Style swap stride", default=1)
+
 args = parser.parse_args()
 
 
@@ -40,7 +46,9 @@ def main():
     wct_model = WCT(checkpoints=args.checkpoints, 
                                 relu_targets=args.relu_targets,
                                 vgg_path=args.vgg_path, 
-                                device=args.device)
+                                device=args.device,
+                                ss_patch_size=args.ss_patch_size, 
+                                ss_stride=args.ss_stride)
 
     # Create needed dirs
     in_dir = os.path.join(args.tmp_dir, 'input')
@@ -78,7 +86,7 @@ def main():
         else:
             style_rgb = style_img
 
-        stylized = wct_model.predict(content_img, style_rgb, args.alpha)
+        stylized = wct_model.predict(content_img, style_rgb, args.alpha, args.swap5, args.ss_alpha)
 
         if args.passes > 1:
             for _ in range(args.passes-1):
