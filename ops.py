@@ -178,6 +178,7 @@ def wct_style_swap(content, style, alpha, patch_size=3, stride=1, eps=1e-8):
     k_c = tf.reduce_sum(tf.cast(tf.greater(Sc, 1e-5), tf.int32))
     k_s = tf.reduce_sum(tf.cast(tf.greater(Ss, 1e-5), tf.int32))
 
+    ### Whiten content
     Dc = tf.diag(tf.pow(Sc[:k_c], -0.5))
 
     fc_hat = tf.matmul(tf.matmul(tf.matmul(Uc[:,:k_c], Dc), Uc[:,:k_c], transpose_b=True), fc)
@@ -185,28 +186,24 @@ def wct_style_swap(content, style, alpha, patch_size=3, stride=1, eps=1e-8):
     # Reshape before passing to style swap, CxH*W -> 1xHxWxC
     whiten_content = tf.expand_dims(tf.transpose(tf.reshape(fc_hat, [Cc,Hc,Wc]), [1,2,0]), 0)
 
-    # Whiten style feature before swapping
+    ### Whiten style before swapping
     Ds = tf.diag(tf.pow(Ss[:k_s], -0.5))
     whiten_style = tf.matmul(tf.matmul(tf.matmul(Us[:,:k_s], Ds), Us[:,:k_s], transpose_b=True), fs)
-
     # Reshape before passing to style swap, CxH*W -> 1xHxWxC
     whiten_style = tf.expand_dims(tf.transpose(tf.reshape(whiten_style, [Cs,Hs,Ws]), [1,2,0]), 0)
 
-    # Style swap whitened encodings
+    ### Style swap whitened encodings
     ss_feature = style_swap(whiten_content, whiten_style, patch_size, stride)
-
     # HxWxC -> CxH*W
     ss_feature = tf.transpose(tf.reshape(ss_feature, [Hc*Wc,Cc]), [1,0])
 
+    ### Color style-swapped encoding with style 
     Ds_sq = tf.diag(tf.pow(Ss[:k_s], 0.5))
-
     fcs_hat = tf.matmul(tf.matmul(tf.matmul(Us[:,:k_s], Ds_sq), Us[:,:k_s], transpose_b=True), ss_feature)
-
     fcs_hat = fcs_hat + ms
 
-    # Blend style-swapped/colored encoding with original content encoding
+    ### Blend style-swapped & colored encoding with original content encoding
     blended = alpha * fcs_hat + (1 - alpha) * (fc + mc)
-
     # CxH*W -> CxHxW
     blended = tf.reshape(blended, (Cc,Hc,Wc))
     # CxHxW -> 1xHxWxC
@@ -225,7 +222,7 @@ def style_swap(content, style, patch_size, stride):
     style_patches = tf.extract_image_patches(style, [1,patch_size,patch_size,1], [1,stride,stride,1], [1,1,1,1], 'VALID')
     before_reshape = tf.shape(style_patches)  # NxRowsxColsxPatch_size*Patch_size*nC
     style_patches = tf.reshape(style_patches, [before_reshape[1]*before_reshape[2],patch_size,patch_size,nC])
-    style_patches = tf.transpose(style_patches, [1,2,3,0])
+    style_patches = tf.transpose(style_patches, [1,2,3,0])  # Patch_sizexPatch_sizexIn_CxOut_c
 
     # Normalize each style patch
     style_patches_norm = tf.nn.l2_normalize(style_patches, dim=3)

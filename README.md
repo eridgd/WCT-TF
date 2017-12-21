@@ -66,8 +66,9 @@ Other args to take note of:
 There are also four keyboard shortcuts:
 
 * `r`  Load random image from style folder
-* `s`  Save frame to a .png
+* `w`  Write frame to a .png
 * `c`  Toggle color preservation
+* `s`  Toggle [style swap](#style-swap) (only applied on layer relu5_1)
 * `q`  Quit cleanly and close streams
 
 `stylize.py` will stylize content images and does not require OpenCV. The options are the same as for the webcam script with the addition of `--content-path`, which can be a single image file or folder, and `--out-path` to specify the output folder. Each style in `--style-path` will be applied to each content image. 
@@ -100,7 +101,7 @@ nvidia-docker run \
   wct-tf
 ```
 
-## Training
+## Training decoders
 
 1. Download [MS COCO images](http://mscoco.org/dataset/#download) for content data.
 
@@ -113,13 +114,51 @@ nvidia-docker run \
 4. Monitor training with TensorBoard: `tensorboard --logdir /path/to/checkpointdir`
 
 
+## Style Swap
+
+Style-swap is another style transfer approach from [this paper](https://arxiv.org/abs/1612.04337) that works by substituting patches in a content encoding with nearest-neighbor patches in a style encoding. As in the official Torch WCT, I have included this as an option for the relu5_1 layer where the feature encodings are small enough for this to be computationally feasible. This option may enhance the stylization effect by transferring local structure from the style image in addition to the overall style.
+
+<p align='center'>
+  <img src='samples/sullivan_style_swap.png' width='768px'>
+</p>
+
+Note how eyes and noses are transferred to semantically similar locations. Because the visual structure is reconstructed using features found in the style image, regions in the content without style counterparts may have odd replacements (like tongues in the first image). 
+
+
+The style-swap procedure [implemented here](https://github.com/eridgd/WCT-TF/blob/master/ops.py#L140) is:
+
+1. Encode the content & style images up to relu5_1 and whiten both to remove style information.
+
+2. Extract patches from the whitened style encoding with tf.extract_image_patches.
+
+3. Use the (normalized) style patches as conv2d filters to convolve with each spatial patch region in the content encoding. This is an efficient way to compute cross-correlation between all content/style patch pairs.
+
+4. Find the channel-wise argmax for each spatial position to determine best matching style patch for the location. Replace with a channel-wise one-hot encoding.
+
+5. For each content patch location, swap in the closest style patch using a transposed convolution over the one-hot encoding with the style patches as filters. The content encoding is now reconstructed using (hopefully) similar structures from the style encoding.
+
+6. Apply WCT coloring to the style-swapped encoding to add style.
+
+
+The args to use this with webcam.py and stylize.py:
+
+* `--swap5`  Enable style swap. This will only be applied if relu5_1 is one of the target layers.
+* `--ss-patch-size`  Patch size for the convolution kernel. This is the size of patches in the feature encoding, not the full size image, so small values like 3 or 5 will typically work well.
+* `--ss-stride`  Stride for the patch kernel. Setting this equal to patch size will extract non-overlapping patches.
+* `--ss-alpha`  Blending between the style-swapped encoding and the original content encoding. 
+
+For example:
+
+   `python webcam.py --checkpoints models/relu5_1 models/relu4_1 models/relu3_1 models/relu2_1 models/relu1_1 --relu-targets relu5_1 relu4_1 relu3_1 relu2_1 relu1_1 --style-size 512 --alpha 0.8 --style-path /path/to/styleimgs --swap5 --ss-patch-size 3 --ss-stride 1 --ss-alpha .7` 
+
+
 ## Notes
 
 * This repo is based on [my implementation](https://github.com/eridgd/AdaIN-TF/) of [Arbitrary Style Transfer in Real-time with Adaptive Instance Normalization](https://arxiv.org/abs/1703.06868) by Huang et al.
 * The stylization pipeline can be hooked up with decoders in any order. For instance, to reproduce the (sub-optimal) reversed fine-to-coarse pipeline in figure 5(d) from the original paper use the option `--relu-targets relu1_1 relu2_1 relu3_1 relu4_1 relu5_1` in webcam.py/stylize.py. 
 * `coral.py` implements [CORellation ALignment](https://arxiv.org/abs/1612.01939) to transfer colors from the content image to the style image in order to preserve colors in the stylized output. The default method uses NumPy and there is also a commented out version in PyTorch that is slightly faster.
 * WCT involves two tf.svd ops, which as of TF r1.4 has a GPU implementation. However, this appears to be 2-4x slower than the CPU version and so is explicitly executed on `/cpu:0` in ops.py. [See here](https://github.com/tensorflow/tensorflow/issues/13603) for an interesting discussion of the issue.
-* There is [an open issue](https://github.com/tensorflow/tensorflow/issues/9234) where for some ill-conditioned matrices the CPU version of tf.svd will ungracefully segfault. Adding a small epsilon to the covariance matrices appears to avoid this without visibly affecting the results. If this issue does occur, there is a [commented block](https://github.com/eridgd/WCT-TF/blob/master/ops.py#L55) that uses np.linalg.svd through tf.py_func. This is stable but incurs a 30%+ performance penalty.
+* There is [an open issue](https://github.com/tensorflow/tensorflow/issues/9234) where for some ill-conditioned matrices the CPU version of tf.svd will ungracefully segfault. Adding a small epsilon to the covariance matrices appears to avoid this without visibly affecting the results. If this issue does occur, there is a [commented block](https://github.com/eridgd/WCT-TF/blob/5feea790c0d8ca8dc0ffab5e4ec4664045e7084c/ops.py#L55-L62) that uses np.linalg.svd through tf.py_func. This is stable but incurs a 30%+ performance penalty.
 
 
 ## Acknowledgments
@@ -138,6 +177,6 @@ Docker support was graciously [provided by @bryant1410](https://github.com/eridg
 - [ ] Interpolation between styles
 - [x] Video stylization
 - [ ] Spatial control/masking
-- [ ] [Style swap](https://github.com/rtqichen/style-swap)
+- [x] [Style swap](#style-swap)
 - [ ] Webcam style window threading
 - [x] ~~Forget this static graph nonsense and redo everything in PyTorch~~ Xueting Li has a [nice implementation](https://github.com/sunshineatnoon/PytorchWCT)
