@@ -96,8 +96,7 @@ def main():
             #     frame_resize = gaussian_filter(frame_resize, sigma=0.5)
 
             # Run the frame through the style network
-            stylized_rgb = wct_model.predict(content_img, style_img, args.alpha,
-                                             args.swap5, args.ss_alpha)
+            stylized_rgb = wct_model.predict(content_img, style_img, args.alpha, args.swap5, args.ss_alpha)
 
             if args.passes > 1:
                 for _ in range(args.passes-1):
