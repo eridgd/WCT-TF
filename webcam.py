@@ -18,7 +18,6 @@ parser.add_argument('-src', '--source', dest='video_source', type=int,
 parser.add_argument('--checkpoints', nargs='+', type=str, help='List of checkpoint directories', required=True)
 parser.add_argument('--relu-targets', nargs='+', type=str, help='List of reluX_1 layers, corresponding to --checkpoints', required=True)
 parser.add_argument('--style-path', type=str, dest='style_path', help='Style images folder', required=True)
-parser.add_argument('--content-path', type=str, dest='content_path', help='Content image to use instead of webcam')
 parser.add_argument('--vgg-path', type=str,
                     dest='vgg_path', help='Path to vgg_normalised.t7', 
                     default='models/vgg_normalised.t7')
@@ -164,18 +163,12 @@ def main():
     keep_colors = args.keep_colors
     swap_style = args.swap5
 
-    if args.content_path is not None:
-        content_img = get_img(args.content_path)
-
     count = 0
 
     while(True):
         ret, frame = cap.read()
 
         if ret is True:       
-            if args.content_path is not None:
-                frame = content_img
-
             frame_resize = cv2.resize(frame, None, fx=style_window.scale, fy=style_window.scale)
 
             if args.noise:  # Generate textures from noise instead of images
