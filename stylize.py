@@ -28,6 +28,7 @@ parser.add_argument('--passes', type=int, help="# of stylization passes per cont
 parser.add_argument('-r','--random', type=int, help="Choose # of random subset of images from style folder", default=0)
 parser.add_argument('--alpha', type=float, help="Alpha blend value", default=1)
 parser.add_argument('--concat', action='store_true', help="Concatenate style image and stylized output", default=False)
+parser.add_argument('--adain', action='store_true', help="Use AdaIN instead of WCT", default=False)
 
 ## Style swap args
 parser.add_argument('--swap5', action='store_true', help="Swap style on layer relu5_1", default=False)
@@ -96,11 +97,11 @@ def main():
             #     frame_resize = gaussian_filter(frame_resize, sigma=0.5)
 
             # Run the frame through the style network
-            stylized_rgb = wct_model.predict(content_img, style_img, args.alpha, args.swap5, args.ss_alpha)
+            stylized_rgb = wct_model.predict(content_img, style_img, args.alpha, args.swap5, args.ss_alpha, args.adain)
 
             if args.passes > 1:
                 for _ in range(args.passes-1):
-                    stylized_rgb = wct_model.predict(stylized_rgb, style_img, args.alpha, args.swap5, args.ss_alpha)
+                    stylized_rgb = wct_model.predict(stylized_rgb, style_img, args.alpha, args.swap5, args.ss_alpha, args.adain)
 
             # Stitch the style + stylized output together, but only if there's one style image
             if args.concat:
