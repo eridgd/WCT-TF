@@ -37,6 +37,7 @@ parser.add_argument('--alpha', type=float, help="Alpha blend value for WCT featu
 parser.add_argument('--concat', action='store_true', help="Concatenate style image and stylized output", default=False)
 parser.add_argument('--noise', action='store_true', help="Synthesize textures from noise images", default=False)
 parser.add_argument('-r', '--random', type=int, help='Load a random img every # iterations', default=0)
+parser.add_argument('--adain', action='store_true', help="Use AdaIN instead of WCT", default=False)
 
 ## Style swap args
 parser.add_argument('--swap5', action='store_true', help="Swap style on layer relu5_1", default=False)
@@ -50,7 +51,7 @@ args = parser.parse_args()
 class StyleWindow(object):
     '''Helper class to handle style image settings'''
 
-    def __init__(self, style_path, img_size=512, crop_size=512, scale=1, alpha=1, swap5=False, ss_alpha=1):
+    def __init__(self, style_path, img_size=512, crop_size=512, scale=1, alpha=1, swap5=False, ss_alpha=1, passes=1):
         if os.path.isdir(style_path):
             self.style_imgs = get_files(style_path)
         else:
@@ -63,25 +64,30 @@ class StyleWindow(object):
         self.scale = scale
         self.alpha = alpha
         self.ss_alpha = ss_alpha
+        self.passes = passes
 
         cv2.namedWindow('Style Controls')
         if len(self.style_imgs) > 1:
             # Select style image by index
-            cv2.createTrackbar('index','Style Controls', 0, len(self.style_imgs)-1, self.set_idx)
+            cv2.createTrackbar('Index','Style Controls', 0, len(self.style_imgs)-1, self.set_idx)
         
-        # Blend param for WCT transform
-        cv2.createTrackbar('WCT alpha','Style Controls', int(self.alpha*100), 100, self.set_alpha)
+        # Blend param for WCT/AdaIN transform
+        cv2.createTrackbar('WCT/AdaIN alpha','Style Controls', int(self.alpha*100), 100, self.set_alpha)
+
+        # Separate blend setting for style-swap
+        cv2.createTrackbar('Style-swap alpha','Style Controls', int(self.ss_alpha*100), 100, self.set_ss_alpha)
 
         # Resize style to this size before cropping
-        cv2.createTrackbar('size','Style Controls', self.img_size, 1280, self.set_size)
+        cv2.createTrackbar('Style size','Style Controls', self.img_size, 1280, self.set_size)
 
         # Size of square crop box for style
-        cv2.createTrackbar('crop size','Style Controls', self.crop_size, 1280, self.set_crop_size)
+        cv2.createTrackbar('Style crop','Style Controls', self.crop_size, 1280, self.set_crop_size)
 
         # Scale the content before processing
-        cv2.createTrackbar('scale','Style Controls', int(self.scale*100), 200, self.set_scale)
+        cv2.createTrackbar('Content scale','Style Controls', int(self.scale*100), 200, self.set_scale)
 
-        cv2.createTrackbar('style swap alpha','Style Controls', int(self.ss_alpha*100), 100, self.set_ss_alpha)
+        # Num times to repeat the stylization pipeline
+        cv2.createTrackbar('# of passes','Style Controls', self.passes, 5, self.set_passes)
 
         self.set_style(random=True, window='Style Controls')
 
@@ -125,6 +131,9 @@ class StyleWindow(object):
     def set_ss_alpha(self, ss_alpha):
         self.ss_alpha = ss_alpha / 100
 
+    def set_passes(self, passes):
+        self.passes = passes
+
 
 def main():
     # Load the WCT model
@@ -136,7 +145,14 @@ def main():
                     ss_stride=args.ss_stride)
 
     # Load a panel to control style settings
-    style_window = StyleWindow(args.style_path, args.style_size, args.crop_size, args.scale, args.alpha, args.swap5, args.ss_alpha)
+    style_window = StyleWindow(args.style_path, 
+                               args.style_size, 
+                               args.crop_size, 
+                               args.scale, 
+                               args.alpha, 
+                               args.swap5, 
+                               args.ss_alpha,
+                               args.passes)
 
     # Start the webcam stream
     cap = WebcamVideoStream(args.video_source, args.width, args.height).start()
@@ -162,6 +178,7 @@ def main():
     # Toggles changed with kb shortcuts
     keep_colors = args.keep_colors
     swap_style = args.swap5
+    use_adain = args.adain
 
     count = 0
 
@@ -188,13 +205,14 @@ def main():
                 style_rgb = style_window.style_rgb
 
             # Run the frame through the style network
-            stylized_rgb = wct_model.predict(content_rgb, style_rgb, style_window.alpha, swap_style, style_window.ss_alpha)
+            stylized_rgb = wct_model.predict(content_rgb, style_rgb, style_window.alpha, swap_style, style_window.ss_alpha, use_adain)
 
-            if args.passes > 1:
-                for i in range(args.passes-1):
-                    stylized_rgb = wct_model.predict(stylized_rgb, style_rgb, style_window.alpha, swap_style, style_window.ss_alpha)
+            # Repeat stylization pipeline
+            if style_window.passes > 1:
+                for i in range(style_window.passes-1):
+                    stylized_rgb = wct_model.predict(stylized_rgb, style_rgb, style_window.alpha, swap_style, style_window.ss_alpha, use_adain)
 
-            # Stitch the style + stylized output together, but only if there's one style image
+            # Stitch the style + stylized output together
             if args.concat:
                 # Resize style img to same height as frame
                 style_rgb_resized = cv2.resize(style_rgb, (stylized_rgb.shape[0], stylized_rgb.shape[0]))
@@ -219,6 +237,9 @@ def main():
             elif key & 0xFF == ord('s'): # Toggle style swap
                 swap_style = not swap_style
                 print('New value for flag swap_style:',swap_style)
+            elif key & 0xFF == ord('a'): # Toggle AdaIN
+                use_adain = not use_adain
+                print('New value for flag use_adain:',use_adain)
             elif key & 0xFF == ord('w'): # Write stylized frame
                 out_f = "{}.png".format(time.time())
                 save_img(out_f, stylized_rgb)

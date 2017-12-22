@@ -67,7 +67,7 @@ class WCT(object):
     def postprocess(image):
         return np.uint8(np.clip(image, 0, 1) * 255)
 
-    def predict(self, content, style, alpha=1, swap5=False, ss_alpha=1):
+    def predict(self, content, style, alpha=1, swap5=False, ss_alpha=1, adain=False):
         '''Stylize a single content/style pair.
 
            Args:
@@ -98,7 +98,8 @@ class WCT(object):
                                                           self.model.style_input: style,
                                                           self.model.alpha: alpha,
                                                           self.model.swap5: swap5,
-                                                          self.model.ss_alpha: ss_alpha})
+                                                          self.model.ss_alpha: ss_alpha,
+                                                          self.model.use_adain: adain})
         print("Stylized in:",time.time() - s)
 
         return self.postprocess(stylized[0])

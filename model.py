@@ -6,7 +6,7 @@ from vgg_normalised import vgg_from_t7
 from keras import backend as K
 from keras.models import Model
 from keras.layers import Input, UpSampling2D, Lambda
-from ops import pad_reflect, Conv2DReflect, torch_decay, wct_tf, wct_style_swap
+from ops import pad_reflect, Conv2DReflect, torch_decay, wct_tf, wct_style_swap, adain
 from collections import namedtuple
 
 
@@ -47,6 +47,9 @@ class WCTModel(object):
         # Style swap settings
         self.swap5 = tf.placeholder_with_default(tf.constant(False), shape=[])
         self.ss_alpha = tf.placeholder_with_default(.7, shape=[], name='ss_alpha')
+
+        # Flag to use AdaIN instead of WCT
+        self.use_adain = tf.placeholder_with_default(tf.constant(False), shape=[])
         
         self.encoder_decoders = []
         
@@ -140,15 +143,18 @@ class WCTModel(object):
                 with tf.name_scope('wct_'+relu_target):
                     if relu_target == 'relu5_1':
                         # Apply style swap on relu5_1 encodings if self.swap5 flag is set. Otherwise perform WCT.
-                        decoder_input = tf.cond(self.swap5, 
-                                                lambda: wct_style_swap(content_encoded,
-                                                                       style_encoded_tensor,
-                                                                       self.ss_alpha,
-                                                                       ss_patch_size, 
-                                                                       ss_stride), 
-                                                lambda: wct_tf(content_encoded, style_encoded_tensor, self.alpha))
+                        decoder_input = tf.case([(self.swap5, lambda: wct_style_swap(content_encoded,
+                                                                                    style_encoded_tensor,
+                                                                                    self.ss_alpha,
+                                                                                    ss_patch_size, 
+                                                                                    ss_stride)),
+                                                (self.use_adain, lambda: adain(content_encoded, style_encoded_tensor, self.alpha))],
+                                                default=lambda: wct_tf(content_encoded, style_encoded_tensor, self.alpha))
                     else:
-                        decoder_input = wct_tf(content_encoded, style_encoded_tensor, self.alpha)
+                        decoder_input = tf.cond(self.use_adain, 
+                                                lambda: adain(content_encoded, style_encoded_tensor, self.alpha),
+                                                lambda: wct_tf(content_encoded, style_encoded_tensor, self.alpha))
+
                     
             else: # In train mode we're trying to reconstruct from the encoding, so pass along unchanged
                 decoder_input = content_encoded
@@ -290,5 +296,7 @@ class WCTModel(object):
         output = Conv2DReflect(layer_name, filters=3, kernel_size=3, padding='valid', activation=None, name=layer_name)(x)  # 256x256 / 64->3
         
         decoder_model = Model(code, output, name='decoder_model_'+relu_target)
+        
         print(decoder_model.summary())
+        
         return decoder_model

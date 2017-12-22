@@ -63,12 +63,13 @@ Other args to take note of:
 * `--noise`  Generate textures from random noise image instead of webcam
 * `--random`  Load a new random image every # of frames
 
-There are also four keyboard shortcuts:
+There are also a couple of keyboard shortcuts:
 
 * `r`  Load random image from style folder
 * `w`  Write frame to a .png
 * `c`  Toggle color preservation
 * `s`  Toggle [style swap](#style-swap) (only applied on layer relu5_1)
+* `a`  Toggle Adaptive Instance Normalization instead of WCT
 * `q`  Quit cleanly and close streams
 
 `stylize.py` will stylize content images and does not require OpenCV. The options are the same as for the webcam script with the addition of `--content-path`, which can be a single image file or folder, and `--out-path` to specify the output folder. Each style in `--style-path` will be applied to each content image. 
