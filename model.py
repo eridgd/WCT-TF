@@ -142,7 +142,9 @@ class WCTModel(object):
             if self.mode != 'train':                
                 with tf.name_scope('wct_'+relu_target):
                     if relu_target == 'relu5_1':
-                        # Apply style swap on relu5_1 encodings if self.swap5 flag is set. Otherwise perform WCT.
+                        # Apply style swap on relu5_1 encodings if self.swap5 flag is set
+                        # Use AdaIN as transfer op instead of WCT if self.use_adain is set
+                        # Otherwise perform WCT
                         decoder_input = tf.case([(self.swap5, lambda: wct_style_swap(content_encoded,
                                                                                     style_encoded_tensor,
                                                                                     self.ss_alpha,
