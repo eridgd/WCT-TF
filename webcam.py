@@ -188,12 +188,11 @@ def main():
                 style_rgb = style_window.style_rgb
 
             # Run the frame through the style network
-            stylized_rgb = wct_model.predict(content_rgb, style_rgb, style_window.alpha,
-                                             swap_style, style_window.ss_alpha)
+            stylized_rgb = wct_model.predict(content_rgb, style_rgb, style_window.alpha, swap_style, style_window.ss_alpha)
 
             if args.passes > 1:
                 for i in range(args.passes-1):
-                    stylized_rgb = wct_model.predict(stylized_rgb, style_rgb, style_window.alpha)
+                    stylized_rgb = wct_model.predict(stylized_rgb, style_rgb, style_window.alpha, swap_style, style_window.ss_alpha)
 
             # Stitch the style + stylized output together, but only if there's one style image
             if args.concat:

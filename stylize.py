@@ -100,7 +100,7 @@ def main():
 
             if args.passes > 1:
                 for _ in range(args.passes-1):
-                    stylized_rgb = wct_model.predict(stylized_rgb, style_img, args.alpha)
+                    stylized_rgb = wct_model.predict(stylized_rgb, style_img, args.alpha, args.swap5, args.ss_alpha)
 
             # Stitch the style + stylized output together, but only if there's one style image
             if args.concat:
