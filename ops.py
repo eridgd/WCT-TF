@@ -4,6 +4,7 @@ import tensorflow as tf
 import numpy as np
 from keras.layers import Conv2D, Lambda
 from tensorflow.python.layers import utils
+from numba import jit
 
 
 ### Layers ###
@@ -55,6 +56,7 @@ def wct_tf(content, style, alpha, eps=1e-8):
 
     ## Uncomment to perform SVD for content/style with np in one call
     ## This is slower than CPU tf.svd but won't segfault for ill-conditioned matrices
+    # @jit
     # def np_svd(content, style):
     #     '''tf.py_func helper to run SVD with NumPy for content/style cov tensors'''
     #     Uc, Sc, _ = np.linalg.svd(content)
@@ -168,6 +170,7 @@ def wct_style_swap(content, style, alpha, patch_size=3, stride=1, eps=1e-8):
 
     ## Uncomment to perform SVD for content/style with np in one call
     ## This is slower than CPU tf.svd but won't segfault for ill-conditioned matrices
+    # @jit
     # def np_svd(content, style):
     #     '''tf.py_func helper to run SVD with NumPy for content/style cov tensors'''
     #     Uc, Sc, _ = np.linalg.svd(content)
