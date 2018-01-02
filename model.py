@@ -6,7 +6,7 @@ from vgg_normalised import vgg_from_t7
 from keras import backend as K
 from keras.models import Model
 from keras.layers import Input, UpSampling2D, Lambda
-from ops import pad_reflect, Conv2DReflect, torch_decay, wct_tf, wct_style_swap, adain
+from ops import pad_reflect, Conv2DReflect, torch_decay, wct_tf, wct_np, wct_style_swap, adain
 from collections import namedtuple
 
 
@@ -50,6 +50,9 @@ class WCTModel(object):
 
         # Flag to use AdaIN instead of WCT
         self.use_adain = tf.placeholder_with_default(tf.constant(False), shape=[])
+
+        # Flag to use NumPy WCT
+        self.use_np_wct = tf.placeholder_with_default(tf.constant(False), shape=[])
         
         self.encoder_decoders = []
         
@@ -150,12 +153,13 @@ class WCTModel(object):
                                                                                     self.ss_alpha,
                                                                                     ss_patch_size, 
                                                                                     ss_stride)),
-                                                (self.use_adain, lambda: adain(content_encoded, style_encoded_tensor, self.alpha))],
+                                                (self.use_adain, lambda: adain(content_encoded, style_encoded_tensor, self.alpha)),
+                                                (self.use_np_wct, lambda: tf.py_func(wct_np, [content_encoded, style_encoded_tensor, self.alpha], tf.float32))],
                                                 default=lambda: wct_tf(content_encoded, style_encoded_tensor, self.alpha))
                     else:
-                        decoder_input = tf.cond(self.use_adain, 
-                                                lambda: adain(content_encoded, style_encoded_tensor, self.alpha),
-                                                lambda: wct_tf(content_encoded, style_encoded_tensor, self.alpha))
+                        decoder_input = tf.case([(self.use_adain, lambda: adain(content_encoded, style_encoded_tensor, self.alpha)),
+                                                (self.use_np_wct, lambda: tf.py_func(wct_np, [content_encoded, style_encoded_tensor, self.alpha], tf.float32))],
+                                                default=lambda: wct_tf(content_encoded, style_encoded_tensor, self.alpha))
 
                     
             else: # In train mode we're trying to reconstruct from the encoding, so pass along unchanged

@@ -38,6 +38,7 @@ parser.add_argument('--concat', action='store_true', help="Concatenate style ima
 parser.add_argument('--noise', action='store_true', help="Synthesize textures from noise images", default=False)
 parser.add_argument('-r', '--random', type=int, help='Load a random img every # iterations', default=0)
 parser.add_argument('--adain', action='store_true', help="Use AdaIN instead of WCT", default=False)
+parser.add_argument('--np-wct', action='store_true', help="Use NumPy version of WCT instead of TF", default=False)
 
 ## Style swap args
 parser.add_argument('--swap5', action='store_true', help="Swap style on layer relu5_1", default=False)
@@ -205,12 +206,24 @@ def main():
                 style_rgb = style_window.style_rgb
 
             # Run the frame through the style network
-            stylized_rgb = wct_model.predict(content_rgb, style_rgb, style_window.alpha, swap_style, style_window.ss_alpha, use_adain)
+            stylized_rgb = wct_model.predict(content_rgb, 
+                                             style_rgb, 
+                                             style_window.alpha, 
+                                             swap_style, 
+                                             style_window.ss_alpha, 
+                                             use_adain,
+                                             args.np_wct)
 
             # Repeat stylization pipeline
             if style_window.passes > 1:
                 for i in range(style_window.passes-1):
-                    stylized_rgb = wct_model.predict(stylized_rgb, style_rgb, style_window.alpha, swap_style, style_window.ss_alpha, use_adain)
+                    stylized_rgb = wct_model.predict(stylized_rgb,                                  
+                                                     style_rgb, 
+                                                     style_window.alpha, 
+                                                     swap_style, 
+                                                     style_window.ss_alpha, 
+                                                     use_adain,
+                                                     args.np_wct)
 
             # Stitch the style + stylized output together
             if args.concat:
