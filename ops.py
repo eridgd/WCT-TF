@@ -94,9 +94,9 @@ def wct_np(content, style, alpha=0.6, eps=1e-5):
        See p.4 of the Universal Style Transfer paper for equations:
        https://arxiv.org/pdf/1705.08086.pdf
     '''    
-    # HxWxC -> CxHxW
-    content_t = np.transpose(content, (2, 0, 1))
-    style_t = np.transpose(style, (2, 0, 1))
+    # 1xHxWxC -> CxHxW
+    content_t = np.transpose(np.squeeze(content), (2, 0, 1))
+    style_t = np.transpose(np.squeeze(style), (2, 0, 1))
 
     # CxHxW -> CxH*W
     content_flat = content_t.reshape(-1, content_t.shape[1]*content_t.shape[2])
@@ -109,9 +109,11 @@ def wct_np(content, style, alpha=0.6, eps=1e-5):
     
     Ec, wc, _ = np.linalg.svd(fcfc)
 
-    Dc = np.diag((wc+eps)**-0.5)
+    k_c = (wc > 1e-5).sum()
 
-    fc_hat = Ec.dot(Dc).dot(Ec.T).dot(fc)
+    Dc = np.diag((wc[:k_c]+eps)**-0.5)
+
+    fc_hat = Ec[:,:k_c].dot(Dc).dot(Ec[:,:k_c].T).dot(fc)
 
     ms = style_flat.mean(axis=1, keepdims=True)
     fs = style_flat - ms
@@ -119,10 +121,12 @@ def wct_np(content, style, alpha=0.6, eps=1e-5):
     fsfs = np.dot(fs, fs.T) / (style_t.shape[1]*style_t.shape[2] - 1)
 
     Es, ws, _ = np.linalg.svd(fsfs)
-    
-    Ds = np.sqrt(np.diag(ws+eps))
 
-    fcs_hat = Es.dot(Ds).dot(Es.T).dot(fc_hat)
+    k_s = (ws > 1e-5).sum()
+    
+    Ds = np.sqrt(np.diag(ws[:k_s]+eps))
+
+    fcs_hat = Es[:,:k_s].dot(Ds).dot(Es[:,:k_s].T).dot(fc_hat)
 
     fcs_hat = fcs_hat + ms
 
@@ -130,11 +134,10 @@ def wct_np(content, style, alpha=0.6, eps=1e-5):
 
     # CxH*W -> CxHxW
     blended = blended.reshape(content_t.shape)
-
-    # CxHxW -> HxWxC
-    blended = np.transpose(blended, (1,2,0))  
+    # CxHxW -> 1xHxWxC
+    blended = np.expand_dims(np.transpose(blended, (1,2,0)), 0)
     
-    return blended
+    return np.float32(blended)
 
 
 ### Style-Swap WCT ###
