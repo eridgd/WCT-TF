@@ -63,6 +63,7 @@ Other args to take note of:
 * `--noise`  Generate textures from random noise image instead of webcam
 * `--random`  Load a new random image every # of frames
 * `--adain`  Use [Adaptive Instance Normalization](https://arxiv.org/abs/1703.06868) as transfer op instead of WCT
+* `--np-wct`  Use NumPy implementation of WCT instead of TF
 
 There are also a couple of keyboard shortcuts:
 

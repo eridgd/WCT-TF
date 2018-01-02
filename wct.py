@@ -76,6 +76,8 @@ class WCT(object):
                alpha: Float blending value for WCT op in [0,1]
                swap5: If True perform style swap at layer relu5_1 instead of WCT
                ss_alpha: [0,1] Float blending value for style-swapped feature & content feature
+               adain: Boolean indicating whether to use AdaIN transform instead of WCT
+               np_wct: Boolean for using NumPy implementation of WCT instead of TF
            Returns:
                Stylized image with pixels in [0,255]
         '''
