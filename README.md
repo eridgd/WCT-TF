@@ -127,7 +127,7 @@ Style-swap is another style transfer approach from [this paper](https://arxiv.or
 Note how eyes and noses are transferred to semantically similar locations. Because the visual structure is reconstructed using features found in the style image, regions in the content without style counterparts may have odd replacements (like tongues in the first image). 
 
 
-The style-swap procedure [implemented here](https://github.com/eridgd/WCT-TF/blob/master/ops.py#L140) is:
+The style-swap procedure [implemented here](https://github.com/eridgd/WCT-TF/blob/8d9aa9e1c90f91494c45f98c21d0142651d0d669/ops.py#L143-L278) is:
 
 1. Encode the content & style images up to relu5_1 and whiten both to remove style information.
 
@@ -156,7 +156,7 @@ For example:
 
 ## Notes
 
-* This repo is based on [my implementation](https://github.com/eridgd/AdaIN-TF/) of [Arbitrary Style Transfer in Real-time with Adaptive Instance Normalization](https://arxiv.org/abs/1703.06868) by Huang et al. The [AdaIN op](https://github.com/eridgd/WCT-TF/blob/master/ops.py#L276) is included here as an alternative transform to WCT. It generally requires multiple stylization passes to achieve a comparable effect.
+* This repo is based on [my implementation](https://github.com/eridgd/AdaIN-TF/) of [Arbitrary Style Transfer in Real-time with Adaptive Instance Normalization](https://arxiv.org/abs/1703.06868) by Huang et al. The [AdaIN op](https://github.com/eridgd/WCT-TF/blob/8d9aa9e1c90f91494c45f98c21d0142651d0d669/ops.py#L280-L294) is included here as an alternative transform to WCT. It generally requires multiple stylization passes to achieve a comparable effect.
 * The stylization pipeline can be hooked up with decoders in any order. For instance, to reproduce the (sub-optimal) reversed fine-to-coarse pipeline in figure 5(d) from the original paper use the option `--relu-targets relu1_1 relu2_1 relu3_1 relu4_1 relu5_1` in webcam.py/stylize.py. 
 * `coral.py` implements [CORellation ALignment](https://arxiv.org/abs/1612.01939) to transfer colors from the content image to the style image in order to preserve colors in the stylized output. The default method uses NumPy and there is also a commented out version in PyTorch that is slightly faster.
 * WCT involves two tf.svd ops, which as of TF r1.4 has a GPU implementation. However, this appears to be 2-4x slower than the CPU version and so is explicitly executed on `/cpu:0` in ops.py. [See here](https://github.com/tensorflow/tensorflow/issues/13603) for an interesting discussion of the issue.
