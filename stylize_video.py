@@ -142,8 +142,9 @@ def main():
                     '-q:v', '0',
                     '-vcodec', 'mpeg4',
                     '-r', str(fr),
-                    out_v
+                    '"' + out_v + '"'
                 ]
+                print(out_args)
 
                 subprocess.call(" ".join(out_args), shell=True)
                 print('Video at: %s' % out_v)
@@ -162,5 +163,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
