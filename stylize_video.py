@@ -1,6 +1,6 @@
 # Adapted from https://github.com/lengstrom/fast-style-transfer/blob/master/evaluate.py
-
 from __future__ import print_function,division
+
 import argparse
 import sys
 import os, random, subprocess, shutil, time
@@ -11,7 +11,7 @@ from utils import preserve_colors_np
 from utils import get_files, get_img, get_img_crop, save_img, resize_to, center_crop
 from wct import WCT
 
-TMP_DIR = '.fns_frames_%s/' % random.randint(0,99999)
+TMP_DIR = '_____fns_frames_%s/' % random.randint(0,99999)
 
 parser = argparse.ArgumentParser()
 
@@ -58,6 +58,20 @@ def main():
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
+    if os.path.isdir(args.in_path):
+        in_path = get_files(args.in_path)
+    else: # Single image file
+        in_path = [args.in_path]
+
+    if os.path.isdir(args.style_path):
+        style_files = get_files(args.style_path)
+    else: # Single image file
+        style_files = [args.style_path]
+
+    print(style_files)
+    import time
+    # time.sleep(999)
+
     in_args = [
         'ffmpeg',
         '-i', args.in_path,
@@ -69,57 +83,83 @@ def main():
     in_files = [os.path.join(in_dir, x) for x in base_names]
     out_files = [os.path.join(out_dir, x) for x in base_names]
 
-    style_img = get_img(args.style_path)
+    
 
-    if args.style_size > 0:
-        style_img = resize_to(style_img, args.style_size)
-    if args.crop_size > 0:
-        style_img = center_crop(style_img, args.crop_size)
 
     s = time.time()
-    for in_f, out_f in zip(in_files, out_files):
-        print('{} -> {}'.format(in_f, out_f))
-        content_img = get_img(in_f)
+    for content_fullpath in in_path:
+        content_prefix, content_ext = os.path.splitext(content_fullpath)
+        content_prefix = os.path.basename(content_prefix)
 
-        if args.keep_colors:
-            style_rgb = preserve_colors_np(style_img, content_img)
-        else:
-            style_rgb = style_img
 
-        stylized = wct_model.predict(content_img, style_rgb, args.alpha, args.swap5, args.ss_alpha)
+        try:
 
-        if args.passes > 1:
-            for _ in range(args.passes-1):
-                stylized = wct_model.predict(stylized, style_rgb, args.alpha)
+            for style_fullpath in style_files:
+                style_img = get_img(style_fullpath)
+                if args.style_size > 0:
+                    style_img = resize_to(style_img, args.style_size)
+                if args.crop_size > 0:
+                    style_img = center_crop(style_img, args.crop_size)
 
-        # Stitch the style + stylized output together, but only if there's one style image
-        if args.concat:
-            # Resize style img to same height as frame
-            style_img_resized = scipy.misc.imresize(style_rgb, (stylized.shape[0], stylized.shape[0]))
-            stylized = np.hstack([style_img_resized, stylized])
+                style_prefix, _ = os.path.splitext(style_fullpath)
+                style_prefix = os.path.basename(style_prefix)
 
-        save_img(out_f, stylized)
+                # print("ARRAY:  ", style_img)
+                out_v = os.path.join(args.out_path, '{}_{}{}'.format(content_prefix, style_prefix, content_ext))
+                print("OUT:",out_v)
+                if os.path.isfile(out_v):
+                    print("SKIP" , out_v)
+                    continue
+                
+                for in_f, out_f in zip(in_files, out_files):
+                    print('{} -> {}'.format(in_f, out_f))
+                    content_img = get_img(in_f)
 
-    fr = 30
-    out_args = [
-        'ffmpeg',
-        '-i', '%s/frame_%%d.png' % out_dir,
-        '-f', 'mp4',
-        '-q:v', '0',
-        '-vcodec', 'mpeg4',
-        '-r', str(fr),
-        args.out_path
-    ]
+                    if args.keep_colors:
+                        style_rgb = preserve_colors_np(style_img, content_img)
+                    else:
+                        style_rgb = style_img
 
-    subprocess.call(" ".join(out_args), shell=True)
-    print('Video at: %s' % args.out_path)
+                    stylized = wct_model.predict(content_img, style_rgb, args.alpha, args.swap5, args.ss_alpha)
 
-    if args.keep_tmp is False:
-        shutil.rmtree(args.tmp_dir)
+                    if args.passes > 1:
+                        for _ in range(args.passes-1):
+                            stylized = wct_model.predict(stylized, style_rgb, args.alpha)
 
-    print('Processed in:',(time.time() - s))
+                    # Stitch the style + stylized output together, but only if there's one style image
+                    if args.concat:
+                        # Resize style img to same height as frame
+                        style_img_resized = scipy.misc.imresize(style_rgb, (stylized.shape[0], stylized.shape[0]))
+                        stylized = np.hstack([style_img_resized, stylized])
+
+                    save_img(out_f, stylized)
+
+                fr = 30
+                out_args = [
+                    'ffmpeg',
+                    '-i', '%s/frame_%%d.png' % out_dir,
+                    '-f', 'mp4',
+                    '-q:v', '0',
+                    '-vcodec', 'mpeg4',
+                    '-r', str(fr),
+                    '"' + out_v + '"'
+                ]
+                print(out_args)
+
+                subprocess.call(" ".join(out_args), shell=True)
+                print('Video at: %s' % out_v)
+
+                if args.keep_tmp is True or len(style_files) > 1:
+                    continue
+                else:
+                    shutil.rmtree(args.tmp_dir)
+                print('Processed in:',(time.time() - s))
+
+            print('Processed in:',(time.time() - s))
  
+        except Exception as e:
+            print("EXCEPTION: ",e)
+            # main()
+
 if __name__ == '__main__':
     main()
-
-
